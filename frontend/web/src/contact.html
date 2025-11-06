@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+    <title>Contact RevealAI - Get Support</title>
+        <script>
+            tailwind.config = {
+                darkMode: 'class'
+            };
+        </script>
+        <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tourney:ital,wdth,wght@0,125,100..900;1,125,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/responsive.css?v=final-cleanup">
+    <link rel="stylesheet" href="/styles/darkmode.css?v=final-cleanup">
+    <script>
+        // Apply dark mode and auth flags before paint for instant correct UI
+        (function(){
+            try {
+                if (localStorage.getItem('darkMode') === 'true') {
+                    document.documentElement.classList.add('dark');
+                }
+                document.documentElement.setAttribute('data-authed', localStorage.getItem('revealAI_isAuthed') === 'true' ? 'true' : 'false');
+            } catch(e) {}
+        })();
+    </script>
+        <style>
+            #nav-auth-profile { display: none; }
+            html[data-authed="true"] #nav-auth-profile { display: inline-flex; }
+            html[data-authed="true"] #nav-auth-signin { display: none; }
+            /* Critical dark mode icon swap without Tailwind */
+            .dm-moon { display: inline-block; }
+            .dm-sun { display: none; }
+            html.dark .dm-moon { display: none; }
+            html.dark .dm-sun { display: inline-block; }
+        </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/scripts/darkmode.js?v=final-cleanup" defer></script>
+    <script>
+        // Immediately apply dark mode to prevent FOUC (Flash of Unstyled Content)
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <script type="module" src="/scripts/nav-auth.js?v=final-cleanup" defer></script>
+    <script src="/scripts/contact.js?v=final-cleanup" defer></script>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-800">
+    <header class="fixed top-4 left-1/2 transform -translate-x-1/2 w-[92vw] md:w-3/4 lg:w-2/3 z-40 backdrop-blur-md bg-white/80 rounded-xl shadow-lg">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+            <a href="/" class="text-2xl font-extrabold text-indigo-600 hover:text-indigo-700 transition cursor-pointer" style="font-family: 'Tourney', sans-serif;">RevealAI</a>
+            <nav>
+                <ul class="hidden md:flex items-center gap-8 text-gray-700">
+                    <li><a class="hover:text-indigo-600 transition" href="/">Home</a></li>
+                    <li><a class="hover:text-indigo-600 transition" href="/guide">Guide</a></li>
+                    <li><a class="hover:text-indigo-600 transition" href="/about">About</a></li>
+                    <li><a class="font-semibold text-indigo-600" href="/contact">Contact</a></li>
+                    <li class="relative">
+                        <a id="nav-auth-signin" href="/register.html" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 font-medium cursor-pointer">Sign Up</a>
+                        <a id="nav-auth-profile" href="/profile.html" class="ml-3 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 font-medium cursor-pointer">Profile</a>
+                        <!-- Click Preview for Profile -->
+                        <div id="profile-hover-preview" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-50 max-h-96 overflow-y-auto">
+                            <h3 class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                Recent Analysis
+                            </h3>
+                            <div id="preview-history" class="space-y-2 text-sm">
+                                <p class="text-gray-500">No analysis history yet</p>
+                            </div>
+                            <div class="mt-3 pt-3 border-t space-y-2">
+                                <a href="/profile" class="block text-indigo-600 hover:text-indigo-700 font-semibold text-sm">View Full History →</a>
+                                <button id="preview-logout-btn" onclick="logoutUser()" class="hidden w-full px-3 py-2 bg-red-100 text-red-700 rounded font-semibold text-sm hover:bg-red-200 transition">
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                            <button id="darkModeToggle" onclick="toggleDarkMode()" class="px-3 py-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl" title="Toggle dark mode">
+                                <i class="fas fa-moon dm-moon" data-icon="moon" aria-hidden="true"></i>
+                                <i class="fas fa-sun dm-sun" data-icon="sun" aria-hidden="true"></i>
+                            </button>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="pt-28 max-w-5xl mx-auto px-6 py-12">
+        <!-- Hero Section -->
+        <section class="mb-12 text-center">
+            <h1 class="text-5xl md:text-6xl font-extrabold text-gray-900 mb-4">Get In Touch</h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">Have questions about deepfake detection? Need support? We're here to help.</p>
+        </section>
+
+        <!-- Contact Section -->
+        <div class="grid md:grid-cols-3 gap-8 mb-12">
+            <!-- Email -->
+            <div class="support-card bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-full mb-4">
+                    <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Email Us</h3>
+                <p class="text-gray-600 mb-4">Send us your questions, feedback, or inquiries</p>
+                <a href="mailto:support@revealai.com" class="text-indigo-600 font-semibold hover:text-indigo-700">support@revealai.com</a>
+            </div>
+
+            <!-- Support -->
+            <div class="support-card bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
+                    <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">24/7 Support</h3>
+                <p class="text-gray-600 mb-4">We're available to help you analyze files and answer questions</p>
+                <p class="text-purple-600 font-semibold">Available Anytime</p>
+            </div>
+
+            <!-- Documentation -->
+            <div class="support-card bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-pink-100 rounded-full mb-4">
+                    <svg class="w-8 h-8 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C6.248 6.253 2 10.998 2 16.5S6.248 26.747 12 26.747s10-4.745 10-10.247S17.752 6.253 12 6.253z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Documentation</h3>
+                <p class="text-gray-600 mb-4">Check our comprehensive guides and FAQs</p>
+                <a href="/guide" class="text-pink-600 font-semibold hover:text-pink-700">View Guide</a>
+            </div>
+        </div>
+
+        <!-- Contact Form Section -->
+        <section class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 mb-12">
+            <h2 class="text-3xl font-bold text-gray-900 mb-8">Send us a Message</h2>
+            <form id="contactForm" class="space-y-6">
+                <!-- Name -->
+                <div>
+                    <label for="name" class="block text-sm font-semibold text-gray-900 mb-2">Full Name</label>
+                    <input type="text" id="name" name="name" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" placeholder="Your full name">
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label for="email" class="block text-sm font-semibold text-gray-900 mb-2">Email Address</label>
+                    <input type="email" id="email" name="email" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" placeholder="your@email.com">
+                </div>
+
+                <!-- Subject -->
+                <div>
+                    <label for="subject" class="block text-sm font-semibold text-gray-900 mb-2">Subject</label>
+                    <select id="subject" name="subject" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+                        <option value="">Select a topic</option>
+                        <option value="support">Technical Support</option>
+                        <option value="billing">Billing & Pricing</option>
+                        <option value="partnership">Partnership Inquiry</option>
+                        <option value="feedback">Feedback</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <!-- Message -->
+                <div>
+                    <label for="message" class="block text-sm font-semibold text-gray-900 mb-2">Message</label>
+                    <textarea id="message" name="message" rows="6" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" placeholder="Tell us how we can help..."></textarea>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="w-full px-8 py-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-xl rounded-lg hover:from-indigo-700 hover:to-purple-700 transition shadow-lg hover:shadow-xl">
+                    Send Message
+                </button>
+            </form>
+        </section>
+
+        <!-- FAQ Section -->
+        <section class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-8 shadow-sm border border-indigo-100">
+            <h2 class="text-3xl font-bold text-gray-900 mb-8">Frequently Asked Questions</h2>
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">What file formats are supported?</h3>
+                    <p class="text-gray-700">RevealAI supports MP4, AVI, MOV, and MKV for video; WAV, MP3, M4A, and FLAC for audio. Maximum file size is 500 MB.</p>
+                </div>
+                <div class="bg-white rounded-lg p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">How long does analysis take?</h3>
+                    <p class="text-gray-700">Most analyses complete within 1-3 minutes depending on file size and server load. You'll see a progress bar indicating processing status.</p>
+                </div>
+                <div class="bg-white rounded-lg p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">What does the score mean?</h3>
+                    <p class="text-gray-700">Scores range from 0-100%. Below 30% indicates authentic content, 30-70% is uncertain (manual review recommended), and above 70% indicates likely deepfake.</p>
+                </div>
+                <div class="bg-white rounded-lg p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Can I download the analysis report?</h3>
+                    <p class="text-gray-700">Yes! After analysis completes, you can download a detailed PDF report including heatmaps, scores, and technical analysis.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-gray-900 text-gray-300 mt-20 border-t-4 border-indigo-600">
+        <div class="max-w-7xl mx-auto px-6 py-12">
+            <!-- Main Footer Content -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+                
+                <!-- Company Info -->
+                <div class="space-y-4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-eye text-white text-lg"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-white">RevealAI</h3>
+                    </div>
+                    <p class="text-sm leading-relaxed">Professional deepfake detection system using advanced AI and forensic analysis to protect media integrity.</p>
+                    <div class="pt-4 border-t border-gray-700">
+                        <p class="text-xs text-gray-400">Version 2.0 - 2025</p>
+                    </div>
+                </div>
+
+                <!-- Quick Links -->
+                <div>
+                    <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-link text-indigo-400"></i>
+                        Quick Links
+                    </h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="/" class="hover:text-indigo-400 transition">Home</a></li>
+                        <li><a href="/guide" class="hover:text-indigo-400 transition">Guide</a></li>
+                        <li><a href="/about" class="hover:text-indigo-400 transition">About</a></li>
+                        <li><a href="/contact" class="hover:text-indigo-400 transition">Contact</a></li>
+                    </ul>
+                </div>
+
+                <!-- Resources -->
+                <div>
+                    <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-book text-indigo-400"></i>
+                        Resources
+                    </h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="hover:text-indigo-400 transition">Documentation</a></li>
+                        <li><a href="#" class="hover:text-indigo-400 transition">API Reference</a></li>
+                        <li><a href="#" class="hover:text-indigo-400 transition">FAQ</a></li>
+                        <li><a href="#" class="hover:text-indigo-400 transition">Blog</a></li>
+                    </ul>
+                </div>
+
+                <!-- Contact Info -->
+                <div>
+                    <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-envelope text-indigo-400"></i>
+                        Contact
+                    </h4>
+                    <ul class="space-y-3 text-sm">
+                        <li class="flex items-start gap-2">
+                            <i class="fas fa-envelope text-indigo-400 mt-1"></i>
+                            <div>
+                                <span class="block text-gray-400">Email</span>
+                                <a href="mailto:contact@revealai.com" class="text-indigo-400 hover:text-indigo-300 transition">contact@revealai.com</a>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fas fa-phone text-indigo-400 mt-1"></i>
+                            <div>
+                                <span class="block text-gray-400">Phone</span>
+                                <a href="tel:+1234567890" class="text-indigo-400 hover:text-indigo-300 transition">+1 (234) 567-890</a>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fas fa-map-marker-alt text-indigo-400 mt-1"></i>
+                            <div>
+                                <span class="block text-gray-400">Address</span>
+                                <span class="block font-semibold text-indigo-400">NMIMS MPSTME, Mumbai</span>
+                                <span class="block text-indigo-300">India</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Social Media & Bottom Section -->
+            <div class="border-t border-gray-700 pt-8">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <!-- Social Media Links -->
+                    <div class="flex items-center gap-6">
+                        <span class="text-sm font-semibold text-white">Follow Us:</span>
+                        <div class="flex gap-4">
+                            <a href="https://github.com/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="GitHub">
+                                <i class="fab fa-github text-white"></i>
+                            </a>
+                            <a href="https://linkedin.com/company/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="LinkedIn">
+                                <i class="fab fa-linkedin-in text-white"></i>
+                            </a>
+                            <a href="https://twitter.com/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="Twitter">
+                                <i class="fab fa-twitter text-white"></i>
+                            </a>
+                            <a href="https://instagram.com/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="Instagram">
+                                <i class="fab fa-instagram text-white"></i>
+                            </a>
+                            <a href="https://youtube.com/@revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="YouTube">
+                                <i class="fab fa-youtube text-white"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Copyright & Legal -->
+                    <div class="text-xs text-gray-500 text-center md:text-right space-y-1">
+                        <p>&copy; 2025 RevealAI. All rights reserved.</p>
+                        <div class="flex gap-4 justify-center md:justify-end">
+                            <a href="#" class="hover:text-indigo-400 transition">Privacy Policy</a>
+                            <a href="#" class="hover:text-indigo-400 transition">Terms of Service</a>
+                            <a href="#" class="hover:text-indigo-400 transition">Cookie Policy</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="/scripts/nav-auth.js?v=final-cleanup" defer></script>
+    <script type="module" src="/scripts/contact.js?v=final-cleanup" defer></script>
+</body>
+</html>

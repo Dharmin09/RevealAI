@@ -1,0 +1,35 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE/editor metadata
+*.code-workspace
+.vscode/
+.idea/
+
+# Runtime artifacts
+backend/learning_data/
+backend/core/__pycache__/
+backend/app/__pycache__/
+backend/**/*.log
+backend/**/*.tmp
+
+# Report/temp artifacts (keep placeholders only)
+reports/*
+!reports/.gitkeep
+temp/*
+!temp/.gitkeep
+
+# Model weights (keep placeholder only)
+models/*
+!models/.gitkeep
+
+# OS files
+Thumbs.db
+.DS_Store

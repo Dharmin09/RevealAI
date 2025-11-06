@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover" />
+    <title>RevealAI - Deepfake Detection</title>
+    <script>
+        // Apply dark mode and auth flags before paint for instant correct UI
+        (function(){
+            try {
+                if (localStorage.getItem('darkMode') === 'true') {
+                    document.documentElement.classList.add('dark');
+                }
+                document.documentElement.setAttribute('data-authed', localStorage.getItem('revealAI_isAuthed') === 'true' ? 'true' : 'false');
+            } catch(e) {}
+        })();
+    </script>
+    <style>
+        /* Instant no-JS auth toggle using data attribute */
+        #nav-auth-profile { display: none; }
+        html[data-authed="true"] #nav-auth-profile { display: inline-flex; }
+        html[data-authed="true"] #nav-auth-signin { display: none; }
+        /* Critical dark mode icon swap without Tailwind to avoid flicker */
+        .dm-moon { display: inline-block; }
+        .dm-sun { display: none; }
+        html.dark .dm-moon { display: none; }
+        html.dark .dm-sun { display: inline-block; }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="description" content="Professional deepfake detection using AI" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tourney:ital,wdth,wght@0,125,100..900;1,125,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/style.css?v=final-cleanup">
+    <link rel="stylesheet" href="/styles/responsive.css?v=final-cleanup">
+    <link rel="stylesheet" href="/styles/darkmode.css?v=final-cleanup">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/scripts/darkmode.js?v=final-cleanup" defer></script>
+    <script>
+        // Immediately apply dark mode to prevent FOUC (Flash of Unstyled Content)
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <script type="module" src="/scripts/nav-auth.js?v=final-cleanup" defer></script>
+    <script src="/scripts/main.js?v=final-cleanup" defer></script>
+</head>
+<body class="min-h-screen bg-white text-gray-900 dark:bg-black dark:text-white" style="overflow-x: hidden;">
+    <header class="fixed top-4 left-1/2 transform -translate-x-1/2 w-[92vw] md:w-3/4 lg:w-2/3 z-40 backdrop-blur-md bg-white/80 dark:bg-black/80 rounded-xl shadow-lg border border-gray-200 dark:border-white/10">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+            <a href="/" class="text-2xl font-extrabold text-indigo-600 hover:text-indigo-700 dark:text-purple-400 dark:hover:text-purple-300 transition cursor-pointer" style="font-family: 'Tourney', sans-serif;" onclick="navigateHome(event);">RevealAI</a>
+            <nav>
+                <ul class="hidden md:flex items-center gap-8 text-gray-700 dark:text-white">
+                    <li><a href="/" class="hover:text-indigo-600 dark:hover:text-purple-400 transition cursor-pointer font-medium" onclick="navigateHome(event);">Home</a></li>
+                    <li><a href="/guide" class="hover:text-indigo-600 dark:hover:text-purple-400 transition cursor-pointer font-medium" onclick="navigateTo('/guide', event);">Guide</a></li>
+                    <li><a href="/about" class="hover:text-indigo-600 dark:hover:text-purple-400 transition cursor-pointer font-medium" onclick="navigateTo('/about', event);">About</a></li>
+                    <li><a href="/contact" class="hover:text-indigo-600 dark:hover:text-purple-400 transition cursor-pointer font-medium" onclick="navigateTo('/contact', event);">Contact</a></li>
+                    <li class="relative">
+                        <a id="nav-auth-signin" href="/register.html" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 dark:bg-indigo-700 dark:hover:bg-indigo-600 font-medium cursor-pointer">Sign Up</a>
+                        <a id="nav-auth-profile" href="/profile.html" class="ml-3 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 dark:bg-indigo-700 dark:hover:bg-indigo-600 font-medium cursor-pointer">Profile</a>
+                        <!-- Click Preview for Profile -->
+                        <div id="profile-hover-preview" class="hidden absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 z-50 max-h-96 overflow-y-auto">
+                            <h3 class="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                Recent Analysis
+                            </h3>
+                            <div id="preview-history" class="space-y-2 text-sm">
+                                <p class="text-gray-500 dark:text-gray-400">No analysis history yet</p>
+                            </div>
+                            <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                                <a href="/profile" class="block text-indigo-600 dark:text-purple-400 hover:text-indigo-500 dark:hover:text-purple-300 font-semibold text-sm">View Full History →</a>
+                                <button id="preview-logout-btn" onclick="logoutUser()" class="hidden w-full px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded font-semibold text-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition">
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                    <!-- Dark Mode Toggle Button -->
+                    <li>
+                        <button id="darkModeToggle" onclick="toggleDarkMode()" class="px-3 py-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl" title="Toggle dark mode">
+                            <i class="fas fa-moon dm-moon" data-icon="moon" aria-hidden="true"></i>
+                            <i class="fas fa-sun dm-sun" data-icon="sun" aria-hidden="true"></i>
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="pt-24 w-full min-h-screen bg-white dark:bg-black px-0 md:px-4 py-8">
+        <div class="w-full max-w-full">
+        <section class="mb-8">
+            <div class="hero-section text-center py-8 px-4">
+                <h1 class="text-5xl md:text-8xl font-extrabold text-gray-900 dark:text-white mb-6 leading-tight">Know what's real</h1>
+                <p class="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto font-medium">Analyze audio and video for synthetic tampering with AI-powered detection.</p>
+            </div>
+        </section>
+
+        <!-- Upload Section -->
+    <section id="analyzeMediaPanel" class="bg-white dark:bg-gradient-to-br dark:from-purple-900 dark:to-purple-800 rounded-2xl p-6 md:p-8 shadow-sm mb-8 mx-auto max-w-6xl border border-purple-200 dark:border-purple-700">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Analyze Media</h2>
+        <p class="text-gray-600 dark:text-purple-100 mb-6">Upload video or audio to detect deepfakes. Get professional forensic analysis with heatmaps and scores.</p>
+            
+            <div class="mt-6 flex flex-col md:flex-row md:items-center gap-4">
+                <form id="uploadForm" class="flex gap-3 items-center flex-1">
+                    <label class="relative flex items-center gap-3 cursor-pointer">
+                        <!-- Make the file input fill the label so native clicks always hit it -->
+                        <input id="mediaUpload" type="file" accept="video/*,audio/*" required style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;" />
+                        <span class="inline-block px-6 py-4 bg-white dark:bg-gray-950 hover:bg-gray-100 dark:hover:bg-gray-800 border-2 border-indigo-500 dark:border-purple-400 rounded-lg shadow-md text-base font-semibold text-gray-900 dark:text-white hover:shadow-lg transition cursor-pointer active:scale-95">Choose file</span>
+                    </label>
+                    <button type="submit" id="analyzeBtn" class="px-12 py-4 bg-indigo-600 dark:bg-purple-600 text-white rounded-lg hover:bg-indigo-500 dark:hover:bg-purple-500 font-bold transition text-xl shadow-md hover:shadow-lg">Analyze</button>
+                </form>
+            </div>
+            
+            <!-- Progress Indicator -->
+            <div id="uploadProgress" class="hidden mt-6 p-4 bg-purple-100 dark:bg-purple-800/50 rounded-lg border border-purple-300 dark:border-purple-600">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-6 h-6 border-4 border-purple-400 dark:border-purple-600 border-t-purple-500 dark:border-t-purple-300 rounded-full animate-spin"></div>
+                    <span class="text-purple-700 dark:text-purple-200 font-semibold" id="loadingMessage">Uploading</span>
+                </div>
+                <div class="w-full bg-purple-200 dark:bg-purple-700 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-purple-500 dark:bg-purple-400 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Terms of Service Disclaimer -->
+            <div class="mt-6 p-4 bg-orange-100 dark:bg-black/40 border border-orange-200 dark:border-purple-700/40 rounded-lg">
+                <p class="text-sm text-orange-700 dark:text-purple-100">
+                    <strong>By clicking "Analyze"</strong>, you agree to RevealAI's Terms of Service. 
+                    Avoid submitting personal information. RevealAI is not liable for submission content or results. 
+                    This model is in active research. 
+                    <a href="/guide" class="text-orange-600 dark:text-purple-200 underline hover:text-orange-500 dark:hover:text-purple-100">Learn more</a>
+                </p>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="resultsSection" class="hidden w-full space-y-6 mx-auto max-w-7xl pb-12">
+            <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 md:p-8 shadow-sm w-full border border-gray-200 dark:border-gray-800">
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">Analysis Results</h2>
+                
+                <!-- COMBINED: Media Preview & Analysis Information -->
+                <div id="mediaPreviewContainer" class="hidden mb-8 p-6 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-3">Media Preview & Analysis Information</h3>
+                    <div class="grid grid-cols-3 gap-3">
+                        <!-- LEFT: Video/Audio Preview (Narrow) -->
+                        <div class="col-span-1">
+                            <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-2">Video Preview</h4>
+                            <!-- Video Preview -->
+                            <div id="videoPreviewSection" class="hidden">
+                                <video 
+                                    id="mediaPreview" 
+                                    controls 
+                                    class="w-full h-full object-contain rounded-lg"
+                                    style="background: black; height: 200px; width: 100%;"
+                                >
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            
+                            <!-- Audio Preview -->
+                            <div id="audioPreviewSection" class="hidden">
+                                <div class="bg-transparent rounded-lg overflow-hidden">
+                                    <!-- Hidden audio element for actual playback -->
+                                    <audio id="audioPreview" preload="auto" style="display:none;">Your browser does not support audio playback.</audio>
+
+                                    <!-- Custom Black & White Audio Player -->
+                                    <div class="w-full max-w-2xl mx-auto">
+                                        <!-- Progress Bar (thin) -->
+                                        <div class="w-full px-4 py-2">
+                                            <input
+                                                type="range"
+                                                id="audioProgressBar"
+                                                class="w-full h-1 appearance-none cursor-pointer"
+                                                min="0" max="100" value="0"
+                                                style="background: linear-gradient(to right, #000 0%, #000 var(--progress, 0%), #e5e7eb var(--progress, 0%), #e5e7eb 100%); border-radius:4px;"
+                                            />
+                                        </div>
+
+                                        <!-- Controls: previous / play / next -->
+                                        <div class="flex items-center justify-center gap-10 py-4">
+                                            <!-- Prev -->
+                                            <button id="audioRewind" title="Rewind 10s" aria-label="Rewind 10 seconds" class="audio-skip-btn flex items-center justify-center w-12 h-12 rounded-xl">
+                                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 19 2 12 11 5"></polyline><polyline points="22 19 13 12 22 5"></polyline></svg>
+                                            </button>
+
+                                            <!-- Big Play Button -->
+                                            <button id="audioPlayPause" title="Play/Pause" class="flex items-center justify-center w-20 h-20 rounded-full shadow-lg text-white">
+                                                <svg id="audioPlayIcon" class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+                                                <svg id="audioPauseIcon" class="w-8 h-8 hidden" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg>
+                                            </button>
+
+                                            <!-- Next -->
+                                            <button id="audioForward" title="Forward 10s" aria-label="Forward 10 seconds" class="audio-skip-btn flex items-center justify-center w-12 h-12 rounded-xl">
+                                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 19 21 12 12 5"></polyline><polyline points="3 19 12 12 3 5"></polyline></svg>
+                                            </button>
+                                        </div>
+
+                                        <!-- Time display -->
+                                        <div class="flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 pb-2">
+                                            <span id="audioCurrentTime" class="mx-2 text-gray-900 dark:text-white">0:00</span>
+                                            <span class="mx-2 text-gray-900 dark:text-white">/</span>
+                                            <span id="audioDuration" class="mx-2 text-gray-900 dark:text-white">0:00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT: Metadata (2 columns) -->
+                        <div class="col-span-2">
+                            <div class="space-y-2">
+                                <!-- VIDEO DETAILS -->
+                                <div id="videoAnalysisSection" class="hidden">
+                                    <div class="bg-blue-50 rounded-lg border border-blue-200 p-3">
+                                                    <h3 class="text-xs font-bold text-blue-700 mb-3">VIDEO DETAILS</h3>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="bg-white rounded border border-blue-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Duration</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="videoDurationOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-blue-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Resolution</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="videoResolutionOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-blue-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Frame Rate</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="videoFPSOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-blue-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Codec</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="videoCodecOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-blue-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Bitrate</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="videoBitrateOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-blue-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Format</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="videoFormatOld">N/A</span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- AUDIO DETAILS -->
+                                <div id="audioAnalysisSection" class="hidden">
+                                    <div class="bg-orange-50 rounded-lg border border-orange-200 p-3">
+                                        <h3 class="text-xs font-bold text-orange-700 mb-3">AUDIO DETAILS</h3>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="bg-white rounded border border-orange-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Duration</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="audioDurationOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-orange-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Sample Rate</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="audioSampleRateOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-orange-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Channels</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="audioChannelsOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-orange-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Codec</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="audioCodecOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-orange-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Bitrate</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="audioBitrateOld">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-orange-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Format</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="audioFormatOld">N/A</span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- FILE INFORMATION -->
+                                <div id="fileInformationSection">
+                                    <div class="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                                        <h3 class="text-xs font-bold text-gray-700 mb-3">FILE INFORMATION</h3>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="bg-white rounded border border-gray-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Filename</p>
+                                                <p class="text-sm font-bold text-gray-900 truncate"><span class="fileInfoFilename">N/A</span></p>
+                                            </div>
+                                            <div class="bg-white rounded border border-gray-100 p-2">
+                                                <p class="text-xs text-gray-600 font-semibold mb-1">Source</p>
+                                                <p class="text-sm font-bold text-gray-900"><span id="fileInfoSource">Uploaded</span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Verdict Card - BELOW INFORMATION - SAME SIZE AS AUDIO ANALYSIS BOXES -->
+                <div id="verdictCard" class="w-full mb-8 p-6 rounded-xl text-center text-white font-bold text-2xl shadow-md border-2" style="display: flex; align-items: center; justify-content: center; min-height: auto;">
+                    Loading results
+                </div>
+
+                <!-- Score Interpretation - Understanding the Scores (MOVED BEFORE SCORES GRID) -->
+                <div class="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 mb-8">
+                    <h4 class="font-semibold text-gray-900 dark:text-gray-100 mb-3">Understanding the Scores:</h4>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="flex items-start gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800">
+                            <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-bold">0-30%</span>
+                            <div class="text-gray-800 dark:text-green-100"><strong>Authentic</strong><br/>High probability of genuine content</div>
+                        </div>
+                        <div class="flex items-start gap-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800">
+                            <span class="bg-yellow-500 text-white px-2 py-1 rounded text-xs font-bold">30-70%</span>
+                            <div class="text-gray-800 dark:text-yellow-100"><strong>Uncertain</strong><br/>Manual review recommended</div>
+                        </div>
+                        <div class="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800">
+                            <span class="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">70-100%</span>
+                            <div class="text-gray-800 dark:text-red-100"><strong>Deepfake</strong><br/>High probability detected</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Scores Grid - VIDEO ONLY -->
+                <div id="videoScoresGrid" class="grid md:grid-cols-2 gap-4 mb-8">
+                    <div class="bg-gradient-to-br from-indigo-600 to-purple-600 p-6 rounded-xl border-2 border-purple-400 shadow-lg dark:bg-indigo-700 dark:border-purple-500">
+                        <div class="text-sm text-white font-semibold mb-3 uppercase tracking-wide">Video Deepfake Score</div>
+                        <div class="flex items-baseline gap-2 mb-4">
+                            <div id="videoScore" class="text-5xl font-bold text-white">--</div>
+                            <div class="text-2xl text-white">%</div>
+                        </div>
+                        <div class="text-sm text-white font-medium">Analysis based on visual artifact detection</div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-xl border-2 border-purple-400 shadow-lg dark:bg-purple-700 dark:border-indigo-500">
+                        <div class="text-sm text-white font-semibold mb-3 uppercase tracking-wide">Analysis Details</div>
+                        <ul id="videoAnalysisDetails" class="space-y-2 text-sm text-white">
+                            <li class="flex items-center gap-2">
+                                <strong>Frames Analyzed:</strong> <span class="framesAnalyzed">Multiple keyframes</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <strong>Model Accuracy:</strong> <span class="modelAccuracy">93.4%</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <strong>Confidence:</strong> <span class="confidence">High</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <strong>Key Finding:</strong> <span class="keyFinding">Analyzing frame artifacts</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Scores Grid - AUDIO ONLY -->
+                <div id="audioScoresGrid" class="hidden grid md:grid-cols-2 gap-4 mb-8">
+                    <div class="audio-score-card bg-gradient-to-br from-orange-50 to-amber-100 p-6 rounded-xl border-2 border-orange-200 shadow-md">
+                        <div class="text-sm text-orange-700 font-semibold mb-3 uppercase tracking-wide dark:text-purple-100">Audio Deepfake Score</div>
+                        <div class="flex items-baseline gap-2 mb-4">
+                            <div id="audioScore" class="text-5xl font-bold text-orange-600 dark:text-purple-300">--</div>
+                            <div class="text-2xl text-orange-600 dark:text-purple-300">%</div>
+                        </div>
+                        <div class="text-sm text-orange-700 font-medium dark:text-purple-100">Analysis based on synthetic speech detection</div>
+                    </div>
+
+                    <div class="audio-details-card bg-gradient-to-br from-amber-50 to-yellow-100 p-6 rounded-xl border-2 border-amber-200 shadow-md">
+                        <div class="text-sm text-amber-700 font-semibold mb-3 uppercase tracking-wide dark:text-purple-100">Analysis Details</div>
+                        <ul id="audioAnalysisDetails" class="space-y-2 text-sm text-amber-900 dark:text-purple-100">
+                            <li class="flex items-center gap-2">
+                                <strong class="dark:text-purple-100">Duration Analyzed:</strong> <span class="durationAnalyzed dark:text-purple-100">8 seconds</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <strong class="dark:text-purple-100">Model Accuracy:</strong> <span class="modelAccuracy dark:text-purple-100">99.92%</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <strong class="dark:text-purple-100">Confidence:</strong> <span class="confidence dark:text-purple-100">High</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <strong class="dark:text-purple-100">Key Finding:</strong> <span class="keyFinding dark:text-purple-100">Analyzing spectral patterns</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Audio Heatmap Section -->
+                <div id="heatmapsContainer" class="hidden mb-10 p-6 bg-gradient-to-r from-indigo-950 via-purple-900 to-black rounded-2xl border border-indigo-700/60 shadow-2xl">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                        <div>
+                            <h3 data-heatmap-title class="text-2xl font-bold text-white tracking-wide">Audio Heatmap Analysis</h3>
+                            <p data-heatmap-description class="mt-1 text-indigo-100/90 text-sm md:text-base max-w-4xl leading-relaxed">
+                                High-resolution mel spectrogram mirroring professional forensic tooling. Hot bands indicate spectral energy spikes often linked to voice cloning or TTS synthesis.
+                            </p>
+                        </div>
+                        <div class="text-[10px] uppercase tracking-[0.35em] text-indigo-200/70 text-right font-semibold space-y-1">
+                            <span class="block">Frequency ↑ (kHz)</span>
+                            <span class="block">Time → (s)</span>
+                        </div>
+                    </div>
+
+                    <div id="heatmapGallery" class="hidden grid grid-cols-1 gap-4"></div>
+
+                    <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-indigo-100/80">
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500"></span><span>Low energy — natural ambience</span></div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span><span>Mid band — prosody + vowels</span></div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span><span>High energy — synthetic artifacts</span></div>
+                    </div>
+                </div>
+
+                <!-- XAI Verdict Panel - Detailed findings (MOVED AFTER SCORES) -->
+                <div id="verdictPanel" class="hidden w-full mb-8"></div>
+
+                <!-- AI Analysis - Why This Verdict? -->
+                <!-- AI Analysis - Why This Verdict? -->
+                <div id="explainabilityContainer" class="hidden mb-8 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm max-w-7xl mx-auto">
+                    <div class="p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-blue-100 mb-4">What We Found</h3>
+
+                        <!-- Plain Language Explanation -->
+                        <div id="explanationText" class="text-gray-800 dark:text-gray-200 text-base mb-4 leading-relaxed bg-white dark:bg-gray-900/50 p-4 rounded-lg border-l-4 border-blue-500 dark:border-blue-400 max-w-5xl mx-auto"></div>
+
+                        <!-- Key Findings List -->
+                        <div id="findingsContainer" class="space-y-3 text-sm pl-2 max-w-5xl mx-auto"></div>
+                    </div>
+                </div>
+
+                <!-- FILE INFORMATION SECTION -->
+                <div id="fileInformationSection" class="hidden mb-8 p-6 bg-gray-50 rounded-xl border-2 border-gray-300 shadow-md w-full">
+                    <div class="space-y-6">
+                        <!-- VIDEO INFORMATION -->
+                        <div id="videoFileInfo" class="hidden">
+                                <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">VIDEO DETAILS</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-white p-4 rounded-lg border border-gray-200">
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Duration</p>
+                                    <p id="videoFileDuration" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Resolution</p>
+                                    <p id="videoFileResolution" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Frame Rate</p>
+                                    <p id="videoFileFrameRate" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Codec</p>
+                                    <p id="videoFileCodec" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Bitrate</p>
+                                    <p id="videoFileBitrate" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FILE INFORMATION -->
+                        <div id="generalFileInfo">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">FILE INFORMATION</h3>
+                            <div class="space-y-3 bg-white p-4 rounded-lg border border-gray-200">
+                                <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                                    <span class="font-semibold text-gray-700">Filename</span>
+                                    <span class="fileInfoFilename text-gray-900 font-medium">--</span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                                    <span class="font-semibold text-gray-700">Source</span>
+                                    <span id="fileInfoSource" class="text-gray-900 font-medium">Uploaded</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AUDIO INFORMATION -->
+                        <div id="audioFileInfo" class="hidden">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">AUDIO DETAILS</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-white p-4 rounded-lg border border-gray-200">
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Duration</p>
+                                    <p id="audioFileDuration" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Sample Rate</p>
+                                    <p id="audioFileSampleRate" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Channels</p>
+                                    <p id="audioFileChannels" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Codec</p>
+                                    <p id="audioFileCodec" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Bitrate</p>
+                                    <p id="audioFileBitrate" class="text-base font-bold text-gray-900">--</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIDEO ANALYSIS INFORMATION (File Info) -->
+                <div id="videoAnalysisSection" class="hidden mb-8 p-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6">VIDEO ANALYSIS INFORMATION</h3>
+                    
+                    <!-- Video File Info Container -->
+                    <div id="fileInfoContainer" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-3 bg-white rounded border border-blue-100">
+                                <span class="font-semibold text-gray-700">Format:</span>
+                                <span id="videoFormatOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-blue-100">
+                                <span class="font-semibold text-gray-700">Duration:</span>
+                                <span id="videoDurationOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-blue-100">
+                                <span class="font-semibold text-gray-700">Resolution:</span>
+                                <span id="videoResolutionOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-blue-100">
+                                <span class="font-semibold text-gray-700">FPS:</span>
+                                <span id="videoFPSOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-blue-100">
+                                <span class="font-semibold text-gray-700">Bitrate:</span>
+                                <span id="videoBitrateOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-blue-100">
+                                <span class="font-semibold text-gray-700">File Size:</span>
+                                <span id="videoFileSizeOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AUDIO ANALYSIS INFORMATION (File Info) -->
+                <div id="audioAnalysisSection" class="hidden mb-8 p-6 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl border-2 border-orange-200 shadow-md">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6">AUDIO ANALYSIS INFORMATION</h3>
+                    
+                    <!-- Audio File Info Container -->
+                    <div id="fileInfoContainer2" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-3 bg-white rounded border border-orange-100">
+                                <span class="font-semibold text-gray-700">Format:</span>
+                                <span id="audioFormatOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-orange-100">
+                                <span class="font-semibold text-gray-700">Duration:</span>
+                                <span id="audioDurationOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-orange-100">
+                                <span class="font-semibold text-gray-700">Sample Rate:</span>
+                                <span id="audioSampleRateOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-orange-100">
+                                <span class="font-semibold text-gray-700">Channels:</span>
+                                <span id="audioChannelsOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-orange-100">
+                                <span class="font-semibold text-gray-700">Bitrate:</span>
+                                <span id="audioBitrateOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                            <div class="p-3 bg-white rounded border border-orange-100">
+                                <span class="font-semibold text-gray-700">File Size:</span>
+                                <span id="audioFileSizeOld" class="ml-2 text-gray-900">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Frame Analysis Section - With Heatmap Overlay Slider -->
+                <div id="frameAnalysisContainer" class="hidden mb-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-purple-300 shadow-xl w-full">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-3xl font-bold text-gray-900 mb-2">🔍 Frame Analysis with Heatmap Overlay</h3>
+                            <p class="text-gray-700 text-sm md:text-base">Use the sliders below to blend heatmaps with original frames from different points in the video. Move left to see original (0%), right to see AI detection map (100%). Bright red/yellow areas indicate suspected deepfake artifacts.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Heatmap Frames -->
+                    <div id="frameAnalysisGrid" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"></div>
+
+                    <div id="frameAnalysisEmpty" class="hidden bg-white/10 border border-purple-400/40 text-purple-100 rounded-xl p-6 text-center text-sm">
+                        No visual heatmaps were returned for this analysis. Try another video or re-run after clearing cache.
+                    </div>
+                    
+                    <!-- Legend -->
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
+                            <p class="text-xs font-bold text-indigo-700 mb-1">Original Frame</p>
+                            <p class="text-xs text-indigo-600">Authentic video frame</p>
+                        </div>
+                        <div class="bg-red-50 p-3 rounded-lg border border-red-200">
+                            <p class="text-xs font-bold text-red-700 mb-1">Heatmap Overlay</p>
+                            <p class="text-xs text-red-600">AI detection probability map</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Spectrogram Section -->
+                <div id="spectrogramContainer" class="hidden mb-8 p-6 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl border-2 border-orange-200 shadow-md">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Audio Spectrogram Analysis</h3>
+                    <p class="text-gray-700 mb-6">
+                        Mel-scale spectrogram showing frequency content over time. 
+                        <strong>Bright red/yellow areas</strong> indicate high energy and potential AI artifacts. 
+                        <strong>Dark blue areas</strong> indicate low energy regions. 
+                        The colorbar shows intensity in dB (decibels).
+                    </p>
+                    
+                    <!-- Spectrogram with Legend -->
+                    <div class="relative bg-white p-4 rounded-lg border border-orange-200 shadow-sm">
+                        <div class="flex items-start gap-4">
+                            <!-- Spectrogram Image -->
+                            <div class="flex-1">
+                                <div class="relative bg-black rounded overflow-hidden" style="aspect-ratio: 16/9;">
+                                    <img id="spectrogram" src="" alt="Audio Spectrogram" class="w-full h-full object-contain" />
+                                </div>
+                                <div class="mt-2 text-center text-sm text-gray-600 font-medium">Time (seconds) →</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Spectrogram Info Cards -->
+                        <div class="grid grid-cols-3 gap-4 mt-6">
+                            <div class="bg-gradient-to-br from-red-50 to-orange-50 p-4 rounded-lg border border-red-200">
+                                <p class="text-xs text-red-700 font-bold mb-2">HIGH ENERGY</p>
+                                <p class="text-sm text-red-900">Bright colors indicate high frequency content - often associated with AI artifacts and synthetic speech patterns</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-yellow-50 to-green-50 p-4 rounded-lg border border-yellow-200">
+                                <p class="text-xs text-yellow-700 font-bold mb-2">MEDIUM ENERGY</p>
+                                <p class="text-sm text-yellow-900">Medium intensity regions show active frequency bands with mixed characteristics</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
+                                <p class="text-xs text-blue-700 font-bold mb-2">LOW ENERGY</p>
+                                <p class="text-sm text-blue-900">Dark colors indicate quiet regions or frequencies with minimal energy content</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Axis Labels -->
+                        <div class="mt-2 text-xs text-gray-600 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Frequency (Mel-scale) ↑</span>
+                                <span>dB Scale (intensity) →</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div id="actionButtonsContainer" class="hidden flex gap-4 w-full max-w-7xl mx-auto">
+                    <button id="downloadReportBtn" onclick="downloadReport()" class="flex-1 px-8 py-5 bg-green-600 text-white text-lg font-bold rounded-lg hover:bg-green-700 transition shadow-lg hover:shadow-xl">
+                        Download Report
+                    </button>
+                    <button id="newAnalysisBtn" onclick="newAnalysis()" class="flex-1 px-8 py-5 bg-gray-700 text-white text-lg font-bold rounded-lg hover:bg-gray-600 transition shadow-lg hover:shadow-xl">
+                        New Analysis
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        </div>
+    </main>
+
+    <footer class="bg-gray-900 text-gray-300 mt-20 border-t-4 border-indigo-600">
+        <div class="max-w-7xl mx-auto px-6 py-12">
+            <!-- Main Footer Content -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+                
+                <!-- Company Info -->
+                <div class="space-y-4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-eye text-white text-lg"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-white">RevealAI</h3>
+                    </div>
+                    <p class="text-sm leading-relaxed">Professional deepfake detection system using advanced AI and forensic analysis to protect media integrity.</p>
+                    <div class="pt-4 border-t border-gray-700">
+                        <p class="text-xs text-gray-400">Version 2.0 - 2025</p>
+                    </div>
+                </div>
+
+                <!-- Quick Links -->
+                <div>
+                    <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-link text-indigo-400"></i>
+                        Quick Links
+                    </h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="/" class="hover:text-indigo-400 transition">Home</a></li>
+                        <li><a href="/guide" class="hover:text-indigo-400 transition">Guide</a></li>
+                        <li><a href="/about" class="hover:text-indigo-400 transition">About</a></li>
+                        <li><a href="/contact" class="hover:text-indigo-400 transition">Contact</a></li>
+                    </ul>
+                </div>
+
+                <!-- Resources -->
+                <div>
+                    <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-book text-indigo-400"></i>
+                        Resources
+                    </h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="hover:text-indigo-400 transition">Documentation</a></li>
+                        <li><a href="#" class="hover:text-indigo-400 transition">API Reference</a></li>
+                        <li><a href="#" class="hover:text-indigo-400 transition">FAQ</a></li>
+                        <li><a href="#" class="hover:text-indigo-400 transition">Blog</a></li>
+                    </ul>
+                </div>
+
+                <!-- Contact Info -->
+                <div>
+                    <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-envelope text-indigo-400"></i>
+                        Contact
+                    </h4>
+                    <ul class="space-y-3 text-sm">
+                        <li class="flex items-start gap-2">
+                            <i class="fas fa-envelope text-indigo-400 mt-1"></i>
+                            <div>
+                                <span class="block text-gray-400">Email</span>
+                                <a href="mailto:contact@revealai.com" class="text-indigo-400 hover:text-indigo-300 transition">contact@revealai.com</a>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fas fa-phone text-indigo-400 mt-1"></i>
+                            <div>
+                                <span class="block text-gray-400">Phone</span>
+                                <a href="tel:+1234567890" class="text-indigo-400 hover:text-indigo-300 transition">+1 (234) 567-890</a>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fas fa-map-marker-alt text-indigo-400 mt-1"></i>
+                            <div>
+                                <span class="block text-gray-400">Address</span>
+                                <span class="block font-semibold text-indigo-400">NMIMS MPSTME, Mumbai</span>
+                                <span class="block text-indigo-300">India</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Social Media & Bottom Section -->
+            <div class="border-t border-gray-700 pt-8">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <!-- Social Media Links -->
+                    <div class="flex items-center gap-6">
+                        <span class="text-sm font-semibold text-white">Follow Us:</span>
+                        <div class="flex gap-4">
+                            <a href="https://github.com/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="GitHub">
+                                <i class="fab fa-github text-white"></i>
+                            </a>
+                            <a href="https://linkedin.com/company/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="LinkedIn">
+                                <i class="fab fa-linkedin-in text-white"></i>
+                            </a>
+                            <a href="https://twitter.com/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="Twitter">
+                                <i class="fab fa-twitter text-white"></i>
+                            </a>
+                            <a href="https://instagram.com/revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="Instagram">
+                                <i class="fab fa-instagram text-white"></i>
+                            </a>
+                            <a href="https://youtube.com/@revealai" target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition" title="YouTube">
+                                <i class="fab fa-youtube text-white"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Copyright & Legal -->
+                    <div class="text-xs text-gray-500 text-center md:text-right space-y-1">
+                        <p>&copy; 2025 RevealAI. All rights reserved.</p>
+                        <div class="flex gap-4 justify-center md:justify-end">
+                            <a href="#" class="hover:text-indigo-400 transition">Privacy Policy</a>
+                            <a href="#" class="hover:text-indigo-400 transition">Terms of Service</a>
+                            <a href="#" class="hover:text-indigo-400 transition">Cookie Policy</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="/scripts/nav-auth.js?v=final-cleanup" defer></script>
+    <script src="/scripts/main.js?v=final-cleanup" defer></script>
+</body>
+</html>
+

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heatmap Slider Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 40px;
+        }
+        .analysis-container {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+        }
+        .frame-container {
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            width: 500px;
+        }
+        .frame-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .frame-title {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .heatmap-wrapper {
+            position: relative;
+            width: 100%;
+            padding-top: 75%; /* Aspect ratio 4:3 */
+            background-color: #000;
+        }
+        .heatmap-wrapper img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .heatmap-overlay {
+            opacity: 0.5; /* Default opacity */
+        }
+        .slider-container {
+            margin-top: 15px;
+            text-align: left;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .opacity-slider {
+            width: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Frame Analysis with Heatmap Overlay</h1>
+    <p>Use the sliders below to blend the heatmap with the original frame. Move left to see original. Right to see detection map.</p>
+
+    <div class="analysis-container">
+        <!-- Frame 1 -->
+        <div class="frame-container" id="frame1">
+            <div class="frame-header">
+                <span class="frame-title">Frame 1</span>
+            </div>
+            <div class="heatmap-wrapper">
+                <img src="https://via.placeholder.com/500x375/0000FF/FFFFFF?text=Original+Frame+1" class="base-image" alt="Original Frame 1">
+                <img src="https://via.placeholder.com/500x375/FF0000/FFFFFF?text=Heatmap+1" class="heatmap-overlay" alt="Heatmap 1">
+            </div>
+            <div class="slider-container">
+                <label for="slider1">Heatmap Opacity</label>
+                <input type="range" id="slider1" class="opacity-slider" min="0" max="1" step="0.01" value="0.5">
+            </div>
+        </div>
+
+        <!-- Frame 2 -->
+        <div class="frame-container" id="frame2">
+            <div class="frame-header">
+                <span class="frame-title">Frame 2</span>
+            </div>
+            <div class="heatmap-wrapper">
+                <img src="https://via.placeholder.com/500x375/00FF00/FFFFFF?text=Original+Frame+2" class="base-image" alt="Original Frame 2">
+                <img src="https://via.placeholder.com/500x375/FFFF00/000000?text=Heatmap+2" class="heatmap-overlay" alt="Heatmap 2">
+            </div>
+            <div class="slider-container">
+                <label for="slider2">Heatmap Opacity</label>
+                <input type="range" id="slider2" class="opacity-slider" min="0" max="1" step="0.01" value="0.5">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Frame 1
+            const slider1 = document.getElementById('slider1');
+            const heatmapOverlay1 = document.querySelector('#frame1 .heatmap-overlay');
+            
+            slider1.addEventListener('input', (e) => {
+                heatmapOverlay1.style.opacity = e.target.value;
+            });
+
+            // Frame 2
+            const slider2 = document.getElementById('slider2');
+            const heatmapOverlay2 = document.querySelector('#frame2 .heatmap-overlay');
+
+            slider2.addEventListener('input', (e) => {
+                heatmapOverlay2.style.opacity = e.target.value;
+            });
+        });
+    </script>
+
+</body>
+</html>

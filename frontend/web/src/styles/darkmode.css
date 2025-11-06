@@ -1,0 +1,326 @@
+﻿/* =====================================================================
+   RevealAI Dark Mode - Black, White, Purple, Red Palette
+   ===================================================================== */
+/* Brand colors (applies in light and dark modes) */
+:root {
+    --brand-purple: #7c3aed; /* primary brand purple (used across site)
+                              keep this value if you want a single purple) */
+    --brand-purple-light: #a78bfa;
+}
+
+/* Light mode (default) */
+body {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+}
+
+html.dark {
+    color-scheme: dark;
+    --dark-bg-primary: #000000;
+    --dark-bg-secondary: #0a0a0a;
+    --dark-bg-tertiary: #121212;
+    --dark-bg-light: #1e1e1e;
+    --dark-text-primary: #ffffff;
+    --dark-text-secondary: #cbd5e1;
+    --dark-text-muted: #9ca3af;
+    --dark-accent-purple: #8b5cf6;
+    --dark-accent-purple-light: #a78bfa;
+    --dark-accent-red: #ef4444;
+    --dark-border: rgba(255,255,255,0.05);
+    --dark-border-light: rgba(255,255,255,0.1);
+}
+
+/* Base styles for dark mode */
+:root.dark {
+    --brand-purple: #8b5cf6; /* A slightly brighter purple for dark mode */
+    --brand-purple-hover: #7c3aed;
+}
+
+
+
+.dark body {
+    background-color: var(--dark-bg-primary) !important;
+    color: var(--dark-text-primary) !important;
+}
+html.dark header { 
+    background-color: #000000 !important;
+    border-bottom-color: var(--dark-border) !important; 
+    color: var(--dark-text-primary) !important; 
+}
+html.dark footer { background-color: var(--dark-bg-secondary) !important; border-top-color: var(--dark-border) !important; color: var(--dark-text-secondary) !important; }
+html.dark main { background-color: var(--dark-bg-primary) !important; color: var(--dark-text-primary) !important; }
+html.dark section { background-color: transparent !important; color: var(--dark-text-primary) !important; }
+html.dark nav { background-color: transparent !important; color: var(--dark-text-primary) !important; }
+html.dark nav a, html.dark nav li a { color: var(--dark-text-primary) !important; }
+html.dark nav a:hover, html.dark nav li a:hover { color: var(--dark-accent-purple) !important; }
+
+/* Containers */
+html.dark .card, html.dark .bg-white, html.dark .bg-gray-50, html.dark .bg-gray-100, html.dark .info-box, html.dark .content-section { background-color: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
+
+/* Headings and Text */
+html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 { color: var(--dark-text-primary) !important; }
+html.dark p { color: var(--dark-text-primary) !important; }
+html.dark .text-black, html.dark .text-white, html.dark .text-gray-900, html.dark .text-gray-800 { color: var(--dark-text-primary) !important; }
+html.dark .text-gray-700, html.dark .text-gray-600, html.dark .text-gray-500, html.dark .text-gray-400 { color: var(--dark-text-secondary) !important; }
+html.dark .text-gray-300 { color: var(--dark-text-muted) !important; }
+html.dark .text-indigo-600, html.dark .text-indigo-700, html.dark .text-indigo-800, html.dark .text-purple-600, html.dark .text-purple-700, html.dark .text-blue-600, html.dark .text-blue-700 { color: var(--dark-accent-purple) !important; }
+html.dark .text-red-600, html.dark .text-red-700 { color: var(--dark-accent-red) !important; }
+html.dark .text-green-600, html.dark .text-green-700 { color: #10b981 !important; }
+
+/* Override h2/h3 with text-gray-900 to be purple in dark mode (important for section titles) */
+html.dark h2.text-gray-900, html.dark h3.text-gray-900 { color: var(--dark-accent-purple) !important; }
+
+/* Links */
+html.dark a { color: var(--dark-accent-purple) !important; }
+html.dark a:hover { color: var(--dark-accent-purple-light) !important; }
+
+/* Buttons */
+html.dark button, html.dark .btn, html.dark .btn-primary, html.dark input[type="button"], html.dark input[type="submit"] { background-color: var(--dark-accent-purple) !important; color: var(--dark-text-primary) !important; border-color: transparent !important; }
+html.dark button:hover, html.dark .btn:hover { background-color: var(--dark-accent-purple-light) !important; }
+html.dark .btn-danger, html.dark .btn-red, html.dark .danger, html.dark .delete, html.dark button.danger { background-color: var(--dark-accent-red) !important; color: #ffffff !important; border-color: transparent !important; }
+html.dark .btn-danger:hover, html.dark .btn-red:hover { background-color: #dc2626 !important; }
+
+/* Background Colors */
+html.dark .bg-indigo-50, html.dark .bg-indigo-100, html.dark .bg-blue-50, html.dark .bg-blue-100, html.dark .bg-purple-50, html.dark .bg-purple-100, html.dark .bg-green-50, html.dark .bg-red-50, html.dark .bg-orange-50 { background-color: var(--dark-bg-tertiary) !important; }
+
+/* Borders */
+html.dark .border-gray-200, html.dark .border-gray-300, html.dark .border-gray-400, html.dark .border-indigo-200, html.dark .border-indigo-300, html.dark .border-purple-200, html.dark .border-blue-200 { border-color: var(--dark-border-light) !important; }
+
+/* Gradients */
+html.dark .from-indigo-50, html.dark .from-indigo-100, html.dark .from-blue-50, html.dark .from-purple-50 { --tw-gradient-from: rgba(124, 58, 237, 0.15) !important; background-color: rgba(124, 58, 237, 0.15) !important; }
+html.dark .from-purple-400 { --tw-gradient-from: rgba(124, 58, 237, 0.25) !important; }
+html.dark .from-red-50 { --tw-gradient-from: rgba(0,0,0,0.3) !important; }
+html.dark .from-orange-50 { --tw-gradient-from: rgba(0,0,0,0.3) !important; }
+html.dark .to-white, html.dark .to-indigo-50, html.dark .to-purple-50 { --tw-gradient-to: rgba(11, 11, 11, 0.8) !important; }
+html.dark .to-orange-50 { --tw-gradient-to: rgba(0,0,0,0.4) !important; }
+html.dark .to-purple-200 { --tw-gradient-to: rgba(124, 58, 237, 0.08) !important; }
+
+/* Forms */
+html.dark input[type="text"], html.dark input[type="email"], html.dark input[type="password"], html.dark input[type="search"], html.dark textarea, html.dark select { background-color: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
+html.dark input::placeholder, html.dark textarea::placeholder { color: var(--dark-text-muted) !important; opacity: 0.7; }
+html.dark input:focus, html.dark textarea:focus, html.dark select:focus { border-color: var(--dark-accent-purple) !important; outline: none; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1) !important; }
+
+/* Tables */
+html.dark table { background-color: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; }
+html.dark table thead { background-color: var(--dark-bg-light) !important; color: var(--dark-text-primary) !important; }
+html.dark table tbody tr:hover { background-color: var(--dark-bg-light) !important; }
+
+/* Badges */
+html.dark .badge, html.dark .label, html.dark .tag { background-color: var(--dark-accent-purple) !important; color: var(--dark-text-primary) !important; }
+html.dark .badge-danger, html.dark .badge-red { background-color: var(--dark-accent-red) !important; color: #ffffff !important; }
+
+/* Alerts */
+html.dark .alert, html.dark .info-box { background-color: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
+html.dark .alert-danger { border-left-color: var(--dark-accent-red) !important; }
+
+/* Shadows */
+html.dark .shadow-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important; }
+html.dark .shadow, html.dark .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6) !important; }
+html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.8) !important; }
+
+/* Footer */
+html.dark footer a { color: var(--dark-accent-purple) !important; }
+html.dark footer a:hover { color: var(--dark-accent-purple-light) !important; }
+html.dark footer h3, html.dark footer h4 { color: var(--dark-text-primary) !important; }
+html.dark footer .bg-indigo-600 { background-color: var(--dark-accent-purple) !important; }
+html.dark footer .bg-indigo-600:hover { background-color: var(--dark-accent-purple-light) !important; }
+
+/* Utilities */
+html.dark .bg-white\/80 { background-color: rgba(11, 11, 11, 0.8) !important; }
+html.dark .opacity-50 { opacity: 0.5 !important; }
+html.dark .opacity-75 { opacity: 0.75 !important; }
+
+/* Hover & Focus */
+html.dark .hover\:bg-indigo-600:hover { background-color: var(--dark-accent-purple) !important; }
+html.dark .focus\:ring-indigo-500:focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.5) !important; }
+
+/* Additional Grid & Layout Elements */
+html.dark .grid, html.dark .flex { background-color: transparent !important; }
+
+/* Force ALL light containers to dark - catch all white/light backgrounds */
+html.dark [class*="bg-white"], html.dark [class*="bg-light"], html.dark [class*="bg-gray-100"],
+html.dark [style*="background-color: rgb(255"], html.dark [style*="background-color: white"],
+html.dark [style*="background: white"], html.dark [style*="background: rgb(255"] {
+    background-color: var(--dark-bg-tertiary) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+/* Nested dark boxes stay dark with proper text contrast */
+html.dark .bg-gray-900, html.dark .bg-black, html.dark [class*="bg-black"], 
+html.dark [style*="background-color: rgb(0,0,0"] {
+    background-color: #1a1a1a !important;
+    color: var(--dark-text-primary) !important;
+}
+
+/* Preserve brand accents in analysis results */
+html.dark #verdictCard.bg-red-500 { background-color: #dc2626 !important; }
+html.dark #verdictCard.bg-yellow-500 { background-color: #f59e0b !important; color: #111827 !important; }
+html.dark #verdictCard.bg-green-500 { background-color: #16a34a !important; }
+
+html.dark #audioScoresGrid .audio-score-card {
+    background: linear-gradient(140deg, rgba(124, 58, 237, 0.78), rgba(91, 33, 182, 0.92)) !important;
+    border-color: rgba(167, 139, 250, 0.55) !important;
+    box-shadow: 0 12px 30px rgba(76, 29, 149, 0.35) !important;
+}
+
+html.dark #audioPlayPause {
+    background: linear-gradient(140deg, rgba(167, 139, 250, 0.9), rgba(124, 58, 237, 0.95)) !important;
+    box-shadow: 0 16px 36px rgba(76, 29, 149, 0.5) !important;
+    border: none !important;
+    color: #ffffff !important;
+}
+
+html.dark #audioPlayPause svg {
+    color: #ffffff !important;
+}
+
+html.dark .audio-skip-btn {
+    background: linear-gradient(140deg, rgba(139, 92, 246, 0.95), rgba(76, 29, 149, 0.95)) !important;
+    color: #f5f3ff !important;
+    box-shadow: 0 14px 30px rgba(59, 7, 100, 0.55) !important;
+    border: none !important;
+}
+
+html.dark .audio-skip-btn svg {
+    color: #f5f3ff !important;
+}
+
+html.dark .audio-skip-btn:hover {
+    box-shadow: 0 18px 36px rgba(59, 7, 100, 0.65) !important;
+}
+
+html.dark #audioScoresGrid .audio-details-card {
+    background: linear-gradient(140deg, rgba(167, 139, 250, 0.65), rgba(124, 58, 237, 0.85)) !important;
+    border-color: rgba(167, 139, 250, 0.55) !important;
+    box-shadow: 0 12px 30px rgba(76, 29, 149, 0.3) !important;
+}
+
+html.dark #analyzeMediaPanel {
+    background: linear-gradient(135deg, rgba(67, 56, 202, 0.95), rgba(124, 58, 237, 0.92)) !important;
+    border-color: rgba(180, 167, 252, 0.35) !important;
+    box-shadow: 0 20px 45px rgba(30, 64, 175, 0.35) !important;
+}
+
+html.dark #analyzeMediaPanel h2,
+html.dark #analyzeMediaPanel p,
+html.dark #analyzeMediaPanel label span,
+html.dark #analyzeMediaPanel #uploadProgress span {
+    color: #f4f4ff !important;
+}
+
+html.dark #analyzeMediaPanel .bg-amber-50,
+html.dark #analyzeMediaPanel .border-amber-200 {
+    background-color: rgba(253, 230, 138, 0.12) !important;
+    border-color: rgba(253, 230, 138, 0.25) !important;
+    color: #fef9c3 !important;
+}
+
+html.dark .badge-real {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(22, 163, 74, 0.4)) !important;
+    color: #bbf7d0 !important;
+    border: 1px solid rgba(34, 197, 94, 0.35) !important;
+}
+
+html.dark .badge-fake {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(127, 29, 29, 0.5)) !important;
+    color: #fecaca !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+html.dark .delete-history-btn:hover {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+html.dark .support-card {
+    background: linear-gradient(150deg, rgba(30, 41, 59, 0.95), rgba(91, 33, 182, 0.82)) !important;
+    border-color: rgba(99, 102, 241, 0.5) !important;
+    box-shadow: 0 16px 35px rgba(17, 24, 39, 0.55) !important;
+}
+
+html.dark .support-card h3 {
+    color: #ede9fe !important;
+}
+
+html.dark .support-card p {
+    color: #d9d6fe !important;
+}
+
+html.dark .support-card a {
+    color: #f9a8d4 !important;
+}
+
+html.dark .support-card a:hover {
+    color: #f472b6 !important;
+}
+
+html.dark .support-card svg {
+    color: #c4b5fd !important;
+}
+
+html.dark .support-card .inline-flex {
+    background: rgba(250, 245, 255, 0.12) !important;
+    color: #c4b5fd !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+html.dark .verdict-pill {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.45) !important;
+}
+
+html.dark .verdict-pill:nth-child(1) {
+    background: linear-gradient(140deg, rgba(22, 101, 52, 0.85), rgba(134, 239, 172, 0.65)) !important;
+}
+
+html.dark .verdict-pill:nth-child(2) {
+    background: linear-gradient(140deg, rgba(161, 98, 7, 0.9), rgba(253, 224, 71, 0.75)) !important;
+}
+
+html.dark .verdict-pill:nth-child(3) {
+    background: linear-gradient(140deg, rgba(185, 28, 28, 0.92), rgba(248, 113, 113, 0.78)) !important;
+}
+
+html.dark .verdict-pill p,
+html.dark .verdict-pill span {
+    color: #f8fafc !important;
+}
+
+
+/* Red text labels and titles in dark boxes */
+html.dark h3[style*="color"], html.dark p[style*="color"],
+html.dark .text-red, html.dark .red-text, html.dark [style*="color: rgb(239,68,68"],
+html.dark [style*="color: #ef4444"], html.dark [style*="color: red"] {
+    color: var(--dark-accent-red) !important;
+}
+
+/* Ensure strong red titles stay visible */
+html.dark strong { color: inherit !important; }
+
+/* White/Light Text in Boxes */
+html.dark .text-white { color: var(--dark-text-primary) !important; }
+html.dark .text-light { color: var(--dark-text-primary) !important; }
+
+/* Title headings in sections */
+html.dark .section-title, html.dark .box-title { color: var(--dark-text-primary) !important; }
+
+/* Ensure list items are readable */
+html.dark li { color: var(--dark-text-primary) !important; }
+html.dark ul, html.dark ol { color: var(--dark-text-primary) !important; }
+
+/* Ensure all spans and divs text is readable */
+html.dark span { color: inherit !important; }
+html.dark div { color: inherit !important; }
+
+/* New dark mode styles */
+.dark .dark\:text-gray-300 {
+    color: #d1d5db;
+}
+.dark .dark\:bg-gray-700 {
+    background-color: #374151;
+}
+.dark .dark\:border-gray-600 {
+    border-color: #4b5563;
+}
+.dark .dark\:hover\:bg-gray-600:hover {
+    background-color: #4b5563;
+}
