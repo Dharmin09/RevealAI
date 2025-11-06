@@ -59,7 +59,7 @@ Key points:
 		 audio_cnn.keras
 		 video_xception.h5
 	 ```
-	 These files are excluded from Git; copy them manually before running inference.
+	 Download both weights from Google Drive (`https://drive.google.com/drive/folders/1bUa6TtVIlHxjz6KxQ7nXIj0CeHLcoUAs?usp=drive_link`) and copy them into this folder—the repository keeps the directory empty by default.
 
 4. **(Optional) Populate sample media** in `samples/` for quick testing.
 
