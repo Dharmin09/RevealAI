@@ -808,7 +808,7 @@ def find_last_conv_layer(model):
 def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
     """Generate Grad-CAM heatmap for model explainability with resilient tensor handling."""
     if model is None or last_conv_layer_name is None:
-        return np.zeros((10, 10), dtype=np.float32)
+        return np.zeros((10, 10), dtype=np.float32), 0.0
 
     try:
         import tensorflow as tf
@@ -832,7 +832,7 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
             last_conv_layer = model.get_layer(last_conv_layer_name)
         except Exception:
             print(f"[GRAD-CAM] ⚠️ Layer '{last_conv_layer_name}' not found")
-            return np.zeros((fallback_height, fallback_width), dtype=np.float32)
+            return np.zeros((fallback_height, fallback_width), dtype=np.float32), 0.0
 
         grad_model = tf.keras.models.Model(
             inputs=model.inputs,
@@ -864,7 +864,7 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
 
             if conv_outputs is None or predictions is None:
                 print("[GRAD-CAM] ⚠️ Could not resolve tensors from grad model outputs")
-                return np.zeros((fallback_height, fallback_width), dtype=np.float32)
+                return np.zeros((fallback_height, fallback_width), dtype=np.float32), 0.0
 
             predictions = tf.convert_to_tensor(predictions)
 
@@ -878,40 +878,30 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
             pred_index = min(int(pred_index), int(num_classes) - 1)
 
             loss = predictions[:, pred_index]
+            confidence = float(predictions[0, pred_index])
+
 
         grads = tape.gradient(loss, conv_outputs)
 
         if grads is None:
             print(f"[GRAD-CAM] ⚠️ Gradients are None for pred_index={pred_index}")
-            return np.zeros((fallback_height, fallback_width), dtype=np.float32)
+            # Only fallback if absolutely necessary
+            return np.zeros((fallback_height, fallback_width), dtype=np.float32), confidence
 
-        # Check if gradients are effectively zero
         grad_mean = tf.reduce_mean(tf.abs(grads))
         if grad_mean < 1e-6:
-            print(f"[GRAD-CAM] ⚠️ Gradients are effectively zero (mean={grad_mean:.2e}), using fallback heatmap")
-            # Create a simple center-focused heatmap as fallback
-            center_y, center_x = fallback_height // 2, fallback_width // 2
-            yy, xx = np.ogrid[:fallback_height, :fallback_width]
-            dist = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
-            max_dist = np.sqrt(center_y ** 2 + center_x ** 2)
-            fallback_heatmap = 1.0 - (dist / max_dist)
-            fallback_heatmap = np.clip(fallback_heatmap, 0.0, 1.0)
-            return fallback_heatmap.astype(np.float32)
+            print(f"[GRAD-CAM] ⚠️ Gradients are effectively zero (mean={grad_mean:.2e}), returning blank heatmap")
+            # Return a blank heatmap instead of a center-focused fallback
+            return np.zeros((fallback_height, fallback_width), dtype=np.float32), confidence
+
 
         pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
 
-        # Check if pooled gradients are effectively zero
         pooled_mean = tf.reduce_mean(tf.abs(pooled_grads))
         if pooled_mean < 1e-6:
-            print(f"[GRAD-CAM] ⚠️ Pooled gradients are effectively zero (mean={pooled_mean:.2e}), using fallback heatmap")
-            # Create a simple center-focused heatmap as fallback
-            center_y, center_x = fallback_height // 2, fallback_width // 2
-            yy, xx = np.ogrid[:fallback_height, :fallback_width]
-            dist = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
-            max_dist = np.sqrt(center_y ** 2 + center_x ** 2)
-            fallback_heatmap = 1.0 - (dist / max_dist)
-            fallback_heatmap = np.clip(fallback_heatmap, 0.0, 1.0)
-            return fallback_heatmap.astype(np.float32)
+            print(f"[GRAD-CAM] ⚠️ Pooled gradients are effectively zero (mean={pooled_mean:.2e}), returning blank heatmap")
+            return np.zeros((fallback_height, fallback_width), dtype=np.float32), confidence
+
 
         conv_outputs_squeezed = conv_outputs[0]
         heatmap = tf.tensordot(conv_outputs_squeezed, pooled_grads, axes=1)
@@ -920,19 +910,18 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
         max_val = tf.reduce_max(heatmap)
         if max_val > 0:
             heatmap = heatmap / max_val
-            # Amplify weak heatmaps to make them more visible
-            heatmap = tf.pow(heatmap, 0.7)  # Boost lower values
+            heatmap = tf.pow(heatmap, 0.7)
 
         result = heatmap.numpy().astype(np.float32)
         print(
             f"[GRAD-CAM] ✅ Heatmap generated - shape: {result.shape}, "
-            f"min: {result.min():.3f}, max: {result.max():.3f}, mean: {result.mean():.3f}, pred_idx: {pred_index}"
+            f"min: {result.min():.3f}, max: {result.max():.3f}, mean: {result.mean():.3f}, pred_idx: {pred_index}, confidence: {confidence:.3f}"
         )
-        return result
+        return result, confidence
 
     except Exception as e:
         print(f"[GRAD-CAM] ❌ Error: {type(e).__name__}: {str(e)[:100]}")
-        return np.zeros((10, 10), dtype=np.float32)
+        return np.zeros((10, 10), dtype=np.float32), 0.0
 
 def create_thermal_colormap(heatmap_normalized, colormap=cv2.COLORMAP_JET, gamma=0.8):
     """Convert a 0-1 heatmap into an RGB thermal map with cool-to-hot colors.
@@ -965,6 +954,10 @@ def create_thermal_colormap(heatmap_normalized, colormap=cv2.COLORMAP_JET, gamma
 
 def overlay_heatmap_on_image(img_rgb, heatmap, alpha=0.6, face_bbox=None, cmap='thermal', return_layers=False, focus_on_facial_features=True):
     """Create focused thermal overlays that highlight manipulation-prone facial features."""
+    # Force alpha and colormap for exact effect
+    alpha = 1.0
+    cmap = 'thermal'
+
     if img_rgb is None:
         return None if return_layers else None
 
@@ -975,93 +968,49 @@ def overlay_heatmap_on_image(img_rgb, heatmap, alpha=0.6, face_bbox=None, cmap='
     img_h, img_w = img_rgb.shape[:2]
     img_rgb_uint8 = img_rgb.astype(np.uint8)
 
+    # Normalize heatmap to 0-1
     heatmap_array = heatmap.astype(np.float32)
     if heatmap_array.max() > 1.0:
         heatmap_array = heatmap_array / (heatmap_array.max() + 1e-8)
-
     if heatmap_array.ndim > 2:
         heatmap_array = heatmap_array[:, :, 0]
-
     heatmap_resized = cv2.resize(heatmap_array, (img_w, img_h), interpolation=cv2.INTER_CUBIC)
-
-    # Apply gentle smoothing to reduce pixelation
-    heatmap_resized = cv2.GaussianBlur(heatmap_resized, (0, 0), sigmaX=1.5, sigmaY=1.5)
     heatmap_resized = np.clip(heatmap_resized, 0.0, 1.0)
 
-    # Apply facial feature masking if available
-    facial_focus = None
-    if focus_on_facial_features and FACE_LANDMARKS_AVAILABLE:
-        try:
-            facial_focus = get_facial_region_emphasis(img_rgb_uint8, blur_sigma=12)
-            if facial_focus is not None:
-                # Blend heatmap with facial region mask: emphasize where faces are
-                heatmap_resized = np.clip(heatmap_resized * (0.5 + 0.5 * facial_focus), 0.0, 1.0)  # Less aggressive blending
-                print(f"[OVERLAY] Facial feature masking applied - facial_focus shape: {facial_focus.shape}, mean: {facial_focus.mean()}")
-            else:
-                print("[OVERLAY] Facial detection returned None, using center focus fallback")
-                # Fallback: emphasize center region (face typically centered)
-                h, w = img_rgb_uint8.shape[:2]
-                cy, cx = h // 2, w // 2
-                yy, xx = np.ogrid[:h, :w]
-                dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
-                max_dist = np.sqrt(cy ** 2 + cx ** 2)
-                center_focus = 1.0 - (dist / max_dist) ** 2
-                heatmap_resized = np.clip(heatmap_resized * (0.6 + 0.4 * center_focus), 0.0, 1.0)
-        except Exception as e:
-            print(f"[OVERLAY] Facial masking failed: {e}, using center focus fallback")
-            # Fallback: emphasize center region
-            h, w = img_rgb_uint8.shape[:2]
-            cy, cx = h // 2, w // 2
-            yy, xx = np.ogrid[:h, :w]
-            dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
-            max_dist = np.sqrt(cy ** 2 + cx ** 2)
-            center_focus = 1.0 - (dist / max_dist) ** 2
-            heatmap_resized = np.clip(heatmap_resized * (0.6 + 0.4 * center_focus), 0.0, 1.0)
+    # Apply face region mask if available
 
-    # If no facial masking but face_bbox provided, use bounding box
-    if facial_focus is None and face_bbox is not None:
+    mask = np.zeros_like(heatmap_resized, dtype=np.float32)
+    if face_bbox is not None:
         x, y, w, h = face_bbox
-        focus_mask = np.zeros_like(heatmap_resized, dtype=np.float32)
-        cv2.rectangle(focus_mask, (x, y), (x + w, y + h), 1.0, -1)
-        focus_mask = cv2.GaussianBlur(focus_mask, (0, 0), sigmaX=15, sigmaY=15)
-        heatmap_resized = np.clip(heatmap_resized * (0.5 + 0.5 * focus_mask), 0.0, 1.0)
-
-    # Enhance contrast for better thermal visualization
-    # Use less aggressive power scaling to preserve color range
-    emphasized = np.power(np.clip(heatmap_resized, 0.0, 1.0), 0.7)
-    
-    # Don't enforce minimum intensity - let low values be blue/dark
-    # This gives authentic thermal camera look where cold=blue, hot=red
-    
-    # Calculate visibility mask with smooth gradients
-    visibility = np.clip(emphasized * 1.5, 0.0, 1.0)
-    visibility = cv2.GaussianBlur(visibility, (0, 0), sigmaX=3, sigmaY=3)
-    visibility = np.clip(visibility, 0.0, 1.0)
-
-    if cmap == 'thermal':
-        heatmap_colored = create_thermal_colormap(emphasized, gamma=0.8)
+        cv2.rectangle(mask, (x, y), (x + w, y + h), 1.0, -1)
+        # Use a wide blur for soft mask
+        mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=30, sigmaY=30)
+        # Only show strong color for high activation
+        heatmap_boosted = np.clip(heatmap_resized, 0.0, 1.0)
+        # Threshold: only highlight if activation > 0.35, else blue
+        highlight = (heatmap_boosted > 0.35).astype(np.float32)
+        base = np.full_like(heatmap_boosted, 0.10)  # blue for low activation
+        masked_heatmap = np.where(mask > 0.05, np.where(highlight, heatmap_boosted, base), 0.0)
+        final_heatmap = masked_heatmap
     else:
-        from matplotlib import cm
-        colormap = cm.get_cmap(cmap)
-        heatmap_colored = (colormap(emphasized)[:, :, :3] * 255).astype(np.uint8)
+        # No face detected: show original image and overlay text
+        overlay_visual = img_rgb_uint8.copy()
+        cv2.putText(overlay_visual, 'No face detected', (30, img_h // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 0), 3, cv2.LINE_AA)
+        if return_layers:
+            return np.zeros_like(img_rgb_uint8), overlay_visual
+        return overlay_visual
 
-    mask = np.expand_dims(visibility, axis=2)
-    heatmap_float = heatmap_colored.astype(np.float32) / 255.0
-    heatmap_layer = heatmap_float * mask
+    # Direct JET colormap
+    heatmap_uint8 = (final_heatmap * 255).astype(np.uint8)
+    heatmap_colored = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+    heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
 
-    img_float = img_rgb_uint8.astype(np.float32) / 255.0
-    overlay_float = img_float * (1.0 - alpha * mask) + heatmap_float * (alpha * mask)
-
-    heatmap_visual = np.clip(heatmap_layer * 255.0, 0, 255).astype(np.uint8)
-    overlay_visual = np.clip(overlay_float * 255.0, 0, 255).astype(np.uint8)
-
-    print(
-        f"[OVERLAY] Thermal layers created: intensity range [{emphasized.min():.3f}-{emphasized.max():.3f}], "
-        f"visibility mean={visibility.mean():.3f}, alpha={alpha}, facial_focus={'enabled' if facial_focus is not None else 'disabled'}"
-    )
+    # Overlay: alpha=1.0, so only heatmap is visible in colored regions
+    overlay_float = (heatmap_colored.astype(np.float32) * (final_heatmap[..., None])) + (img_rgb_uint8.astype(np.float32) * (1.0 - final_heatmap[..., None]))
+    overlay_visual = np.clip(overlay_float, 0, 255).astype(np.uint8)
 
     if return_layers:
-        return heatmap_visual, overlay_visual
+        return heatmap_colored, overlay_visual
     return overlay_visual
 
 def create_professional_comparison(original_frame, heatmap, frame_idx, alpha=0.3):

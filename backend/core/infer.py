@@ -227,10 +227,14 @@ def infer_video(model, video_path, every_n_frames=15, max_frames=20, heatmap_fra
                 })
 
         # Run model inference on all frames
+        print(f"[DEBUG] infer_video: X shape = {X.shape}, dtype = {X.dtype}")
         preds = model.predict(X, verbose=0)
+        print(f"[DEBUG] infer_video: preds shape = {preds.shape}, values = {preds}")
         fake_idx = 1 if preds.shape[1] > 1 else 0
         avg_fake_prob = float(np.mean(preds[:, fake_idx]))
-        
+        print(f"[DEBUG] infer_video: avg_fake_prob = {avg_fake_prob}")
+        for i, pred in enumerate(preds):
+            print(f"[DEBUG] Frame {i}: pred = {pred}")
         # Adjust thresholds for fake detection
         if avg_fake_prob > 0.95:
             avg_fake_prob = 1.0  # High confidence fake
@@ -244,30 +248,28 @@ def infer_video(model, video_path, every_n_frames=15, max_frames=20, heatmap_fra
         
         try:
             last_conv = find_last_conv_layer(model)
-            
+            confidences = []
             for i in range(len(X)):
-                # Use full-resolution original frame for display
                 original_frame = original_frames_full[i].astype('uint8')
                 original_frames.append(original_frame)
 
-                # Generate Grad-CAM heatmap
-                hm_raw = make_gradcam_heatmap(X[i:i+1], model, last_conv, pred_index=fake_idx)
+                # Generate Grad-CAM heatmap and confidence
+                hm_raw, confidence = make_gradcam_heatmap(X[i:i+1], model, last_conv, pred_index=fake_idx)
+                confidences.append(confidence)
                 hm_resized = cv2.resize(hm_raw, (original_frame.shape[1], original_frame.shape[0]))
-                
-                # Get face bounding box if available
+
+                print(f"[DEBUG] Frame {i}: confidence = {confidence}, frame shape = {original_frame.shape}, heatmap max = {hm_raw.max():.3f}, min = {hm_raw.min():.3f}")
+
                 face_bbox = None
                 if i < len(frame_metadata) and frame_metadata[i].get('face_detected') and frame_metadata[i].get('face_bbox'):
                     face_bbox = frame_metadata[i].get('face_bbox')
-                
-                # Create overlay with thermal coloring and facial feature focus
-                # Higher alpha (0.7) for vibrant thermal colors like reference image
+
                 heatmap_layer, overlay = overlay_heatmap_on_image(
                     original_frame,
                     hm_resized,
-                    alpha=0.7,
-                    face_bbox=face_bbox,
-                    cmap='thermal',
+                    # alpha and cmap are now forced in overlay_heatmap_on_image
                     return_layers=True,
+                    face_bbox=face_bbox,
                     focus_on_facial_features=True,
                 )
                 heatmaps.append(heatmap_layer)
@@ -329,11 +331,12 @@ def infer_video(model, video_path, every_n_frames=15, max_frames=20, heatmap_fra
                     original_frames = heuristic_originals
         
         return {
-            "video_score": avg_fake_prob, 
+            "video_score": avg_fake_prob,
             "heatmaps": heatmaps,
             "heatmap_overlays": heatmap_overlays,
             "original_frames": original_frames,
             "frame_metadata": frame_metadata,
+            "frame_confidences": confidences if 'confidences' in locals() else [],
         }
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -352,14 +355,28 @@ def infer_audio(model, wav_path):
     if img is None:
         spec = audio_to_melspectrogram(wav_path, duration=5.0)
         if spec is None:
-            return {"audio_score": 0.0, "spec_img": None, "heatmap_viz": None}
+            return {"audio_score": 0.0, "spec_img": None, "heatmap_viz": None, "audio_message": "No audio detected"}
         img = spec_to_rgb_image(spec, out_size=IMG_SIZE_AUDIO)
+
+    # Pre-check: if audio is low energy (ambient noise), skip deepfake scoring
+    import numpy as np
+    audio_data = img.astype('float32') / 255.0
+    mean_energy = np.mean(audio_data)
+    std_energy = np.std(audio_data)
+    # If mean and std are both very low, it's likely silence or ambient
+    if mean_energy < 0.08 and std_energy < 0.04:
+        return {
+            "audio_score": 0.0,
+            "spec_img": img,
+            "heatmap_viz": None,
+            "audio_message": "No speech detected—audio not analyzed for deepfake."
+        }
 
     x = np.expand_dims(img.astype('float32') / 255.0, axis=0)
     pred = model.predict(x, verbose=0)[0]
     fake_idx = 1 if len(pred) > 1 else 0
     audio_score = float(pred[fake_idx])
-    
+
     # [PASS] NEW: Also generate a large professional heatmap visualization for reports
     # Pass the audio score so the heatmap uses verdict-based coloring
     heatmap_viz = None
@@ -371,12 +388,13 @@ def infer_audio(model, wav_path):
         print(f"[ERROR] Could not generate audio heatmap visualization: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-    
+
     return {
         "audio_score": audio_score,
         "spec_img": img,
         "heatmap_viz": heatmap_viz,
         "audio_heatmap": heatmap_viz,
+        "audio_message": "Speech detected—audio analyzed for deepfake."
     }
 
 def combine_scores(video_score, audio_score, video_weight=0.6, audio_weight=0.4):

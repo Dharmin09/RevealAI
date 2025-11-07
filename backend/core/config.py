@@ -45,8 +45,8 @@ if IS_COLAB:
     PROJECT_ROOT = Path('/content/drive/MyDrive/revealai')
     DATA_ROOT = PROJECT_ROOT / "datasets"
 else:
-    # Local machine - auto-detect
-    PROJECT_ROOT = detect_project_root()
+    # Local machine - force to E:\Datasets for model path
+    PROJECT_ROOT = Path('E:/Datasets')
     DATA_ROOT = PROJECT_ROOT
 
 print(f"[CONFIG] PROJECT_ROOT: {PROJECT_ROOT}")
