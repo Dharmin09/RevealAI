@@ -1,9 +1,11 @@
+ 
 # src/core/utils.py
 import os
 import cv2
 import io
 import tempfile
 import subprocess
+import shutil
 import numpy as np
 import librosa
 from PIL import Image
@@ -12,6 +14,7 @@ import tensorflow as tf
 # Lazy load TensorFlow to avoid blocking on import
 _TF = None
 _TF_LOADED = False
+_FFMPEG_PATH = None
 
 def _ensure_tf_loaded():
     global _TF, _TF_LOADED
@@ -31,10 +34,17 @@ try:
     import mediapipe as mp
     mp_face_detection = mp.solutions.face_detection if mp else None
     mp_face_mesh = mp.solutions.face_mesh if mp else None
+    from .face_landmarks import (
+        detect_facial_landmarks,
+        create_facial_region_mask,
+        get_facial_region_emphasis,
+    )
+    FACE_LANDMARKS_AVAILABLE = True
 except ImportError:
     mp = None
     mp_face_detection = None
     mp_face_mesh = None
+    FACE_LANDMARKS_AVAILABLE = False
 
 try:
     import plotly.graph_objects as go
@@ -250,6 +260,110 @@ def preprocess_frames_for_xception(frames):
         # If TensorFlow isn't available, return normalized frames
         print("[WARNING] TensorFlow not available - using raw frame preprocessing")
         return frames.astype('float32') / 255.0
+
+def _resolve_ffmpeg_path():
+    """Return the ffmpeg executable path if available."""
+    global _FFMPEG_PATH
+    if _FFMPEG_PATH is not None:
+        return _FFMPEG_PATH
+
+    candidates = []
+    env_candidate = os.environ.get('FFMPEG_PATH')
+    if env_candidate:
+        candidates.append(env_candidate)
+
+    which_candidate = shutil.which('ffmpeg')
+    if which_candidate:
+        candidates.append(which_candidate)
+
+    if os.name == 'nt':
+        windows_defaults = [
+            'C:/ffmpeg/bin/ffmpeg.exe',
+            'C:/Program Files/ffmpeg/bin/ffmpeg.exe',
+            'C:/Program Files/FFmpeg/bin/ffmpeg.exe',
+            'C:/Program Files (x86)/ffmpeg/bin/ffmpeg.exe',
+            'C:/ProgramData/chocolatey/bin/ffmpeg.exe',
+        ]
+        candidates.extend(windows_defaults)
+
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            _FFMPEG_PATH = candidate
+            print(f"[FFMPEG] Using executable at {_FFMPEG_PATH}")
+            return _FFMPEG_PATH
+
+    _FFMPEG_PATH = None
+    print("[FFMPEG] Executable not found; video conversion features will be disabled.")
+    return None
+
+
+def convert_video_to_mp4(video_path, output_path=None):
+    """Convert any video file to MP4 (H.264/AAC) without quality loss when possible."""
+    if not video_path or not os.path.exists(video_path):
+        print(f"[VIDEO] Conversion skipped; source not found: {video_path}")
+        return None
+
+    ext = os.path.splitext(video_path)[1].lower()
+    if ext == '.mp4':
+        return video_path
+
+    ffmpeg_path = _resolve_ffmpeg_path()
+    if not ffmpeg_path:
+        print("[VIDEO] Cannot convert video because ffmpeg is unavailable.")
+        return None
+
+    if output_path is None:
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', prefix='revealai_conv_')
+        output_path = tmp_file.name
+        tmp_file.close()
+
+    copy_cmd = [
+        ffmpeg_path,
+        '-y',
+        '-i', video_path,
+        '-c', 'copy',
+        '-movflags', '+faststart',
+        output_path,
+    ]
+
+    try:
+        subprocess.run(copy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        print(f"[VIDEO] Converted to MP4 via stream copy: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError:
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        print("[VIDEO] Stream copy failed; re-encoding to MP4 (H.264/AAC).")
+
+    encode_cmd = [
+        ffmpeg_path,
+        '-y',
+        '-i', video_path,
+        '-c:v', 'libx264',
+        '-preset', 'medium',
+        '-crf', '18',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart',
+        output_path,
+    ]
+
+    try:
+        subprocess.run(encode_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        print(f"[VIDEO] Re-encoded to MP4: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as exc:
+        print(f"[ERROR] Video conversion to MP4 failed: {exc}")
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        return None
+
 
 def audio_to_melspectrogram(wav_path, sr=16000, n_mels=128, hop_length=512, n_fft=2048, duration=5.0):
     """Fast audio to mel-spectrogram conversion - optimized for speed"""
@@ -596,15 +710,15 @@ def create_audio_heatmap_visualization(audio_path, sr=16000, n_mels=256, hop_len
         return None
 
 def find_last_conv_layer(model):
-    """Locate the last convolutional layer in ``model`` for Grad-CAM."""
+    """Locate the best convolutional layer for Grad-CAM - prefer layers with good spatial resolution."""
     if model is None:
         raise ValueError("Model instance is required to locate convolutional layers.")
 
     total_layers = len(model.layers)
     print(f"[GRAD-CAM] Searching for convolutional layer in model with {total_layers} layers...")
 
-    # Log the tail of the model for quick debugging insight (last 10 layers)
-    for index, layer in enumerate(reversed(model.layers[-10:]), start=1):
+    # Log the tail of the model for quick debugging insight (last 15 layers)
+    for index, layer in enumerate(reversed(model.layers[-15:]), start=1):
         layer_type = type(layer).__name__
         output_shape = getattr(layer, 'output_shape', 'unknown')
         print(
@@ -612,86 +726,343 @@ def find_last_conv_layer(model):
             f"{layer.name} ({layer_type}) - shape: {output_shape}"
         )
 
-    # Scan backwards to find the last convolutional layer with 4D output
+    # Find all convolutional layers with 4D output
+    conv_layers = []
     for layer in reversed(model.layers):
         layer_type = type(layer).__name__
         is_conv = any(
             conv_name in layer_type
             for conv_name in ['Conv2D', 'SeparableConv2D', 'DepthwiseConv2D', 'Conv']
         )
-        has_4d_output = hasattr(layer, 'output_shape') and len(layer.output_shape) == 4
+        output_shape = getattr(layer, 'output_shape', None)
+
+        dims = None
+        if output_shape is not None and output_shape != 'unknown':
+            try:
+                dims = len(output_shape)
+            except TypeError:
+                pass
+
+        if dims is None:
+            # Fall back to graph tensor metadata (handles custom layers / lazy shapes)
+            try:
+                tensor = getattr(layer, 'output', None)
+                if tensor is not None and hasattr(tensor, 'shape'):
+                    dims = len(tensor.shape)
+                    output_shape = tuple(int(d) if d is not None else -1 for d in tensor.shape)
+            except Exception:
+                dims = None
+
+        has_4d_output = dims == 4
 
         if is_conv and has_4d_output:
-            print(
-                f"[GRAD-CAM] ✅ Found suitable layer: {layer.name} "
-                f"({layer_type}) - shape: {layer.output_shape}"
-            )
-            return layer.name
+            # Get spatial dimensions
+            spatial_size = 1
+            if output_shape and len(output_shape) >= 3:
+                h, w = output_shape[1], output_shape[2]
+                if h is not None and w is not None:
+                    spatial_size = h * w
+            
+            conv_layers.append({
+                'name': layer.name,
+                'type': layer_type,
+                'output_shape': output_shape,
+                'spatial_size': spatial_size
+            })
+
+    if not conv_layers:
+        print("[GRAD-CAM] ❌ No convolutional layers found!")
+        raise ValueError("Could not find any convolutional layers for Grad-CAM.")
+
+    # Prefer layers with larger spatial resolution (better for visualization)
+    # but not too large (avoid early layers that might be too low-level)
+    conv_layers.sort(key=lambda x: x['spatial_size'], reverse=True)
+    
+    # Skip layers that are too large (early layers) or too small (deep layers)
+    # Aim for spatial size between 100 and 1000 pixels
+    best_layer = None
+    for layer_info in conv_layers:
+        size = layer_info['spatial_size']
+        if 100 <= size <= 1000:
+            best_layer = layer_info
+            break
+    
+    # Fallback to the largest spatial layer if no ideal one found
+    if best_layer is None and conv_layers:
+        best_layer = conv_layers[0]
+
+    if best_layer:
+        print(
+            f"[GRAD-CAM] ✅ Selected layer: {best_layer['name']} "
+            f"({best_layer['type']}) - shape: {best_layer['output_shape']} "
+            f"(spatial size: {best_layer['spatial_size']})"
+        )
+        return best_layer['name']
 
     # If no convolutional layer was located, surface clear diagnostics
-    print("[GRAD-CAM] ❌ No convolutional layer found! Model summary:")
+    print("[GRAD-CAM] ❌ No suitable convolutional layer found! Model summary:")
     print(f"[GRAD-CAM]   Total layers: {total_layers}")
     print(f"[GRAD-CAM]   Tail layer types: {[type(l).__name__ for l in model.layers[-5:]]}")
     raise ValueError("Could not find a suitable convolutional layer for Grad-CAM.")
 
 def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
-    """Generate Grad-CAM heatmap for model explainability"""
+    """Generate Grad-CAM heatmap for model explainability with resilient tensor handling."""
     if model is None or last_conv_layer_name is None:
-        return np.zeros((img_array.shape[1], img_array.shape[2]))
-    
+        return np.zeros((10, 10), dtype=np.float32)
+
     try:
         import tensorflow as tf
-        grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(last_conv_layer_name).output, model.output])
-        with tf.GradientTape() as tape:
-            conv_outputs, predictions = grad_model(img_array)
-            if pred_index is None:
-                pred_index = tf.argmax(predictions[0])
-            loss = predictions[:, pred_index]
-        grads = tape.gradient(loss, conv_outputs)
-        pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
-        conv_outputs = conv_outputs[0]
-        heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
-        heatmap = tf.squeeze(heatmap)
-        heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-8)
-        return heatmap.numpy()
-    except Exception as e:
-        print(f"[WARNING] Could not generate Grad-CAM: {e}")
-        return np.zeros((img_array.shape[1], img_array.shape[2]))
 
-def overlay_heatmap_on_image(img_rgb, heatmap, alpha=0.5, cmap='jet'):
+        # Convert incoming data to a TensorFlow tensor we can safely reuse
+        if not isinstance(img_array, (tf.Tensor, np.ndarray)):
+            img_array = np.array(img_array, dtype=np.float32)
+
+        if isinstance(img_array, np.ndarray):
+            img_array = tf.convert_to_tensor(img_array, dtype=tf.float32)
+
+        if len(img_array.shape) == 3:
+            img_array = tf.expand_dims(img_array, axis=0)
+
+        # Record fallback spatial dims in case we need to bail out
+        fallback_height = int(img_array.shape[1]) if img_array.shape[1] is not None else 10
+        fallback_width = int(img_array.shape[2]) if img_array.shape[2] is not None else 10
+
+        # Retrieve the last convolutional layer defined earlier
+        try:
+            last_conv_layer = model.get_layer(last_conv_layer_name)
+        except Exception:
+            print(f"[GRAD-CAM] ⚠️ Layer '{last_conv_layer_name}' not found")
+            return np.zeros((fallback_height, fallback_width), dtype=np.float32)
+
+        grad_model = tf.keras.models.Model(
+            inputs=model.inputs,
+            outputs=[last_conv_layer.output, model.output]
+        )
+
+        def _ensure_tensor(value):
+            """Pick the first tensor-like object from nested lists/tuples."""
+            if isinstance(value, (list, tuple)):
+                for item in value:
+                    tensor = _ensure_tensor(item)
+                    if tensor is not None:
+                        return tensor
+                return None
+            if hasattr(value, "shape"):
+                return value
+            return None
+
+        with tf.GradientTape() as tape:
+            outputs = grad_model(img_array, training=False)
+
+            if isinstance(outputs, (list, tuple)) and len(outputs) == 2:
+                conv_outputs_raw, predictions_raw = outputs
+            else:
+                conv_outputs_raw, predictions_raw = outputs
+
+            conv_outputs = _ensure_tensor(conv_outputs_raw)
+            predictions = _ensure_tensor(predictions_raw)
+
+            if conv_outputs is None or predictions is None:
+                print("[GRAD-CAM] ⚠️ Could not resolve tensors from grad model outputs")
+                return np.zeros((fallback_height, fallback_width), dtype=np.float32)
+
+            predictions = tf.convert_to_tensor(predictions)
+
+            if len(predictions.shape) == 1:
+                predictions = tf.expand_dims(predictions, axis=0)
+
+            if pred_index is None:
+                pred_index = int(tf.argmax(predictions[0]))
+
+            num_classes = predictions.shape[1]
+            pred_index = min(int(pred_index), int(num_classes) - 1)
+
+            loss = predictions[:, pred_index]
+
+        grads = tape.gradient(loss, conv_outputs)
+
+        if grads is None:
+            print(f"[GRAD-CAM] ⚠️ Gradients are None for pred_index={pred_index}")
+            return np.zeros((fallback_height, fallback_width), dtype=np.float32)
+
+        # Check if gradients are effectively zero
+        grad_mean = tf.reduce_mean(tf.abs(grads))
+        if grad_mean < 1e-6:
+            print(f"[GRAD-CAM] ⚠️ Gradients are effectively zero (mean={grad_mean:.2e}), using fallback heatmap")
+            # Create a simple center-focused heatmap as fallback
+            center_y, center_x = fallback_height // 2, fallback_width // 2
+            yy, xx = np.ogrid[:fallback_height, :fallback_width]
+            dist = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
+            max_dist = np.sqrt(center_y ** 2 + center_x ** 2)
+            fallback_heatmap = 1.0 - (dist / max_dist)
+            fallback_heatmap = np.clip(fallback_heatmap, 0.0, 1.0)
+            return fallback_heatmap.astype(np.float32)
+
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+        # Check if pooled gradients are effectively zero
+        pooled_mean = tf.reduce_mean(tf.abs(pooled_grads))
+        if pooled_mean < 1e-6:
+            print(f"[GRAD-CAM] ⚠️ Pooled gradients are effectively zero (mean={pooled_mean:.2e}), using fallback heatmap")
+            # Create a simple center-focused heatmap as fallback
+            center_y, center_x = fallback_height // 2, fallback_width // 2
+            yy, xx = np.ogrid[:fallback_height, :fallback_width]
+            dist = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
+            max_dist = np.sqrt(center_y ** 2 + center_x ** 2)
+            fallback_heatmap = 1.0 - (dist / max_dist)
+            fallback_heatmap = np.clip(fallback_heatmap, 0.0, 1.0)
+            return fallback_heatmap.astype(np.float32)
+
+        conv_outputs_squeezed = conv_outputs[0]
+        heatmap = tf.tensordot(conv_outputs_squeezed, pooled_grads, axes=1)
+
+        heatmap = tf.maximum(heatmap, 0)
+        max_val = tf.reduce_max(heatmap)
+        if max_val > 0:
+            heatmap = heatmap / max_val
+            # Amplify weak heatmaps to make them more visible
+            heatmap = tf.pow(heatmap, 0.7)  # Boost lower values
+
+        result = heatmap.numpy().astype(np.float32)
+        print(
+            f"[GRAD-CAM] ✅ Heatmap generated - shape: {result.shape}, "
+            f"min: {result.min():.3f}, max: {result.max():.3f}, mean: {result.mean():.3f}, pred_idx: {pred_index}"
+        )
+        return result
+
+    except Exception as e:
+        print(f"[GRAD-CAM] ❌ Error: {type(e).__name__}: {str(e)[:100]}")
+        return np.zeros((10, 10), dtype=np.float32)
+
+def create_thermal_colormap(heatmap_normalized, colormap=cv2.COLORMAP_JET, gamma=0.8):
+    """Convert a 0-1 heatmap into an RGB thermal map with cool-to-hot colors.
+    
+    Uses JET colormap for authentic thermal imaging look:
+    - Blue/Cyan: Low activation (cool regions)
+    - Green/Yellow: Medium activation 
+    - Orange/Red: High activation (hot regions)
     """
-    Overlay Grad-CAM heatmap on original image with proper blending.
+    if heatmap_normalized is None or heatmap_normalized.size == 0:
+        return np.zeros((0, 0, 3), dtype=np.uint8)
+
+    heatmap_norm = np.clip(heatmap_normalized, 0.0, 1.0).astype(np.float32)
     
-    Args:
-        img_rgb: Original RGB image (numpy array)
-        heatmap: Grad-CAM heatmap (0-1 normalized)
-        alpha: Heatmap blending strength (0.5 = 50% heatmap visibility)
-        cmap: Colormap to use ('jet' = blue-green-yellow-red)
+    # Apply gamma correction for better color distribution
+    # Lower gamma (0.8) gives more vivid colors like thermal cameras
+    if gamma != 1.0:
+        heatmap_norm = np.power(heatmap_norm, gamma)
+
+    heatmap_uint8 = (heatmap_norm * 255).astype(np.uint8)
     
-    Returns:
-        Blended overlay image
-    """
-    # Ensure heatmap is normalized to 0-1
-    if heatmap.max() > 1.0:
-        heatmap = heatmap / heatmap.max()
+    # JET colormap gives the classic thermal imaging look
+    # Blue -> Cyan -> Green -> Yellow -> Red
+    heatmap_bgr = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+    heatmap_rgb = cv2.cvtColor(heatmap_bgr, cv2.COLOR_BGR2RGB)
     
-    # Resize heatmap to match image dimensions
-    heatmap_resized = cv2.resize(heatmap, (img_rgb.shape[1], img_rgb.shape[0]))
+    print(f"[COLORMAP] Created thermal map - shape: {heatmap_rgb.shape}, unique_colors: {len(np.unique(heatmap_rgb.flatten()))}")
+    return heatmap_rgb
+
+
+def overlay_heatmap_on_image(img_rgb, heatmap, alpha=0.6, face_bbox=None, cmap='thermal', return_layers=False, focus_on_facial_features=True):
+    """Create focused thermal overlays that highlight manipulation-prone facial features."""
+    if img_rgb is None:
+        return None if return_layers else None
+
+    if heatmap is None or heatmap.size == 0:
+        base = img_rgb.astype(np.uint8)
+        return (np.zeros_like(base), base) if return_layers else base
+
+    img_h, img_w = img_rgb.shape[:2]
+    img_rgb_uint8 = img_rgb.astype(np.uint8)
+
+    heatmap_array = heatmap.astype(np.float32)
+    if heatmap_array.max() > 1.0:
+        heatmap_array = heatmap_array / (heatmap_array.max() + 1e-8)
+
+    if heatmap_array.ndim > 2:
+        heatmap_array = heatmap_array[:, :, 0]
+
+    heatmap_resized = cv2.resize(heatmap_array, (img_w, img_h), interpolation=cv2.INTER_CUBIC)
+
+    # Apply gentle smoothing to reduce pixelation
+    heatmap_resized = cv2.GaussianBlur(heatmap_resized, (0, 0), sigmaX=1.5, sigmaY=1.5)
+    heatmap_resized = np.clip(heatmap_resized, 0.0, 1.0)
+
+    # Apply facial feature masking if available
+    facial_focus = None
+    if focus_on_facial_features and FACE_LANDMARKS_AVAILABLE:
+        try:
+            facial_focus = get_facial_region_emphasis(img_rgb_uint8, blur_sigma=12)
+            if facial_focus is not None:
+                # Blend heatmap with facial region mask: emphasize where faces are
+                heatmap_resized = np.clip(heatmap_resized * (0.5 + 0.5 * facial_focus), 0.0, 1.0)  # Less aggressive blending
+                print(f"[OVERLAY] Facial feature masking applied - facial_focus shape: {facial_focus.shape}, mean: {facial_focus.mean()}")
+            else:
+                print("[OVERLAY] Facial detection returned None, using center focus fallback")
+                # Fallback: emphasize center region (face typically centered)
+                h, w = img_rgb_uint8.shape[:2]
+                cy, cx = h // 2, w // 2
+                yy, xx = np.ogrid[:h, :w]
+                dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+                max_dist = np.sqrt(cy ** 2 + cx ** 2)
+                center_focus = 1.0 - (dist / max_dist) ** 2
+                heatmap_resized = np.clip(heatmap_resized * (0.6 + 0.4 * center_focus), 0.0, 1.0)
+        except Exception as e:
+            print(f"[OVERLAY] Facial masking failed: {e}, using center focus fallback")
+            # Fallback: emphasize center region
+            h, w = img_rgb_uint8.shape[:2]
+            cy, cx = h // 2, w // 2
+            yy, xx = np.ogrid[:h, :w]
+            dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+            max_dist = np.sqrt(cy ** 2 + cx ** 2)
+            center_focus = 1.0 - (dist / max_dist) ** 2
+            heatmap_resized = np.clip(heatmap_resized * (0.6 + 0.4 * center_focus), 0.0, 1.0)
+
+    # If no facial masking but face_bbox provided, use bounding box
+    if facial_focus is None and face_bbox is not None:
+        x, y, w, h = face_bbox
+        focus_mask = np.zeros_like(heatmap_resized, dtype=np.float32)
+        cv2.rectangle(focus_mask, (x, y), (x + w, y + h), 1.0, -1)
+        focus_mask = cv2.GaussianBlur(focus_mask, (0, 0), sigmaX=15, sigmaY=15)
+        heatmap_resized = np.clip(heatmap_resized * (0.5 + 0.5 * focus_mask), 0.0, 1.0)
+
+    # Enhance contrast for better thermal visualization
+    # Use less aggressive power scaling to preserve color range
+    emphasized = np.power(np.clip(heatmap_resized, 0.0, 1.0), 0.7)
     
-    # Apply colormap to create RGB heatmap
-    colormap = cm.get_cmap(cmap)
-    heatmap_colored = (colormap(heatmap_resized)[:, :, :3] * 255).astype(np.uint8)
+    # Don't enforce minimum intensity - let low values be blue/dark
+    # This gives authentic thermal camera look where cold=blue, hot=red
     
-    # [PASS] CRITICAL FIX: Increase alpha from 0.2 to 0.5+ for better visibility
-    # This makes the heatmap much more prominent while still showing the face
-    overlay = cv2.addWeighted(
-        img_rgb.astype(np.uint8),      # Original image
-        1.0 - alpha,                    # Original visibility (50%)
-        heatmap_colored,                # Heatmap layer
-        alpha,                          # Heatmap visibility (50%)
-        0                               # No gamma adjustment
+    # Calculate visibility mask with smooth gradients
+    visibility = np.clip(emphasized * 1.5, 0.0, 1.0)
+    visibility = cv2.GaussianBlur(visibility, (0, 0), sigmaX=3, sigmaY=3)
+    visibility = np.clip(visibility, 0.0, 1.0)
+
+    if cmap == 'thermal':
+        heatmap_colored = create_thermal_colormap(emphasized, gamma=0.8)
+    else:
+        from matplotlib import cm
+        colormap = cm.get_cmap(cmap)
+        heatmap_colored = (colormap(emphasized)[:, :, :3] * 255).astype(np.uint8)
+
+    mask = np.expand_dims(visibility, axis=2)
+    heatmap_float = heatmap_colored.astype(np.float32) / 255.0
+    heatmap_layer = heatmap_float * mask
+
+    img_float = img_rgb_uint8.astype(np.float32) / 255.0
+    overlay_float = img_float * (1.0 - alpha * mask) + heatmap_float * (alpha * mask)
+
+    heatmap_visual = np.clip(heatmap_layer * 255.0, 0, 255).astype(np.uint8)
+    overlay_visual = np.clip(overlay_float * 255.0, 0, 255).astype(np.uint8)
+
+    print(
+        f"[OVERLAY] Thermal layers created: intensity range [{emphasized.min():.3f}-{emphasized.max():.3f}], "
+        f"visibility mean={visibility.mean():.3f}, alpha={alpha}, facial_focus={'enabled' if facial_focus is not None else 'disabled'}"
     )
-    return overlay
+
+    if return_layers:
+        return heatmap_visual, overlay_visual
+    return overlay_visual
 
 def create_professional_comparison(original_frame, heatmap, frame_idx, alpha=0.3):
     """

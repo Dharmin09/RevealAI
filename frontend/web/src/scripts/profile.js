@@ -55,62 +55,6 @@ function renderUserProfile(user) {
     }
 }
 
-function renderLearningStatus(status) {
-    if (!profileInfo) {
-        return;
-    }
-
-    let statusContainer = document.getElementById('learning-status');
-    if (!statusContainer) {
-        statusContainer = document.createElement('div');
-        statusContainer.id = 'learning-status';
-        statusContainer.className = 'mt-6 p-4 rounded-lg bg-indigo-50 border border-indigo-200 text-sm text-gray-700';
-        profileInfo.appendChild(statusContainer);
-    }
-
-    const perf = status?.current_performance || {};
-    const improvement = status?.improvement_metrics || {};
-    const retrain = status?.retraining || {};
-
-    const accuracy = perf.accuracy !== undefined ? `${perf.accuracy}%` : 'N/A';
-    const totalLogged = perf.total ?? 0;
-    const correct = perf.correct ?? 0;
-    const incorrect = perf.incorrect ?? 0;
-
-    const improvementCopy = improvement?.insufficient_data
-        ? `Need ${improvement.predictions_needed} more labeled predictions for trend analysis.`
-        : `Accuracy improved by ${improvement.improvement ?? 0}% (recent period)`;
-
-    const autoRetrainCopy = retrain?.status === 'running'
-        ? `Retraining models… started ${retrain.started_at || 'recently'}.`
-        : retrain?.status === 'ready'
-            ? 'Corrections ready. Retraining queued.'
-            : retrain?.status === 'idle'
-                ? 'Retraining not required right now.'
-                : 'Retraining status unknown.';
-
-    statusContainer.innerHTML = `
-        <h3 class="text-base font-semibold text-indigo-700 mb-2">Model Learning Health</h3>
-        <p><strong>Recent Accuracy:</strong> ${accuracy}</p>
-        <p><strong>Predictions Logged:</strong> ${totalLogged} (✅ ${correct} / ❌ ${incorrect})</p>
-        <p><strong>Trend:</strong> ${improvementCopy}</p>
-        <p><strong>Auto-Retrain:</strong> ${autoRetrainCopy}</p>
-    `;
-}
-
-async function fetchLearningStatus() {
-    try {
-        const response = await fetch('/api/learning/status', { cache: 'no-store' });
-        if (!response.ok) {
-            throw new Error(`Status request failed: ${response.status}`);
-        }
-        const data = await response.json();
-        renderLearningStatus(data);
-    } catch (err) {
-        console.warn('Unable to fetch learning status', err);
-    }
-}
-
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         renderLoggedOutState();
@@ -118,8 +62,4 @@ onAuthStateChanged(auth, (user) => {
     }
 
     renderUserProfile(user);
-    fetchLearningStatus();
 });
-
-// Fallback: if auth state takes too long, still attempt to load status so admins can monitor
-setTimeout(fetchLearningStatus, 3000);

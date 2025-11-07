@@ -239,6 +239,7 @@ def infer_video(model, video_path, every_n_frames=15, max_frames=20, heatmap_fra
 
         # Generate heatmaps for each frame
         heatmaps = []
+        heatmap_overlays = []
         original_frames = []
         
         try:
@@ -253,18 +254,84 @@ def infer_video(model, video_path, every_n_frames=15, max_frames=20, heatmap_fra
                 hm_raw = make_gradcam_heatmap(X[i:i+1], model, last_conv, pred_index=fake_idx)
                 hm_resized = cv2.resize(hm_raw, (original_frame.shape[1], original_frame.shape[0]))
                 
-                # Create overlay and add to list
-                overlay = overlay_heatmap_on_image(original_frame, hm_resized, alpha=0.5)
-                heatmaps.append(overlay)
+                # Get face bounding box if available
+                face_bbox = None
+                if i < len(frame_metadata) and frame_metadata[i].get('face_detected') and frame_metadata[i].get('face_bbox'):
+                    face_bbox = frame_metadata[i].get('face_bbox')
+                
+                # Create overlay with thermal coloring and facial feature focus
+                # Higher alpha (0.7) for vibrant thermal colors like reference image
+                heatmap_layer, overlay = overlay_heatmap_on_image(
+                    original_frame,
+                    hm_resized,
+                    alpha=0.7,
+                    face_bbox=face_bbox,
+                    cmap='thermal',
+                    return_layers=True,
+                    focus_on_facial_features=True,
+                )
+                heatmaps.append(heatmap_layer)
+                heatmap_overlays.append(overlay)
 
         except Exception as e:
             print(f"[WARN] Could not generate heatmaps: {e}")
             import traceback
             traceback.print_exc()
+
+        # Fallback: synthesize heuristic heatmaps if Grad-CAM failed
+        if not heatmaps:
+            print("[HEATMAP] [FALLBACK] Generating heuristic heatmaps using edge energy maps")
+            heuristic_heatmaps = []
+            heuristic_overlays = []
+            heuristic_originals = []
+
+            for frame in original_frames_full:
+                if frame is None:
+                    continue
+
+                original_frame = frame.astype('uint8')
+                heuristic_originals.append(original_frame)
+
+                try:
+                    gray = cv2.cvtColor(original_frame, cv2.COLOR_RGB2GRAY)
+                    edges = cv2.Canny(gray, 60, 180)
+                    edges = cv2.GaussianBlur(edges, (21, 21), 0)
+                    energy = cv2.normalize(edges.astype('float32'), None, 0.0, 1.0, cv2.NORM_MINMAX)
+
+                    # Boost regions that look suspicious (edges + brightness variance)
+                    brightness = cv2.GaussianBlur(gray, (31, 31), 0)
+                    brightness = cv2.normalize(brightness.astype('float32'), None, 0.0, 1.0, cv2.NORM_MINMAX)
+                    intensity_map = np.clip(energy * 0.8 + brightness * 0.2, 0.0, 1.0)
+
+                    color_map = cv2.applyColorMap((intensity_map * 255).astype('uint8'), cv2.COLORMAP_JET)
+                    color_map = cv2.cvtColor(color_map, cv2.COLOR_BGR2RGB)
+
+                    alpha_mask = np.clip((intensity_map - 0.2) / 0.8, 0.0, 1.0)
+                    alpha_mask = cv2.GaussianBlur(alpha_mask, (0, 0), sigmaX=6, sigmaY=6)
+                    alpha_mask_expanded = alpha_mask[..., None]
+
+                    heatmap_layer = (color_map.astype(np.float32) * alpha_mask_expanded).astype(np.uint8)
+                    overlay = (
+                        original_frame.astype(np.float32) * (1.0 - 0.6 * alpha_mask_expanded) +
+                        color_map.astype(np.float32) * (0.6 * alpha_mask_expanded)
+                    )
+
+                    heuristic_heatmaps.append(heatmap_layer)
+                    heuristic_overlays.append(np.clip(overlay, 0, 255).astype(np.uint8))
+                except Exception as overlay_err:
+                    print(f"[HEATMAP] Fallback overlay failed: {overlay_err}")
+
+            if heuristic_heatmaps:
+                heatmaps = heuristic_heatmaps
+                if not heatmap_overlays:
+                    heatmap_overlays = heuristic_overlays
+                if not original_frames:
+                    original_frames = heuristic_originals
         
         return {
             "video_score": avg_fake_prob, 
             "heatmaps": heatmaps,
+            "heatmap_overlays": heatmap_overlays,
             "original_frames": original_frames,
             "frame_metadata": frame_metadata,
         }

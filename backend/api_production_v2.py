@@ -4,11 +4,12 @@ RevealAI Production API v2 - Real Model Inference
 Serves website and API endpoints with lazy model loading
 """
 
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory, make_response
 from flask_cors import CORS
 import os
 import sys
 from pathlib import Path
+from datetime import datetime, timedelta
 import base64
 import io
 import tempfile
@@ -18,6 +19,9 @@ import warnings
 import subprocess
 import json
 import librosa
+import shutil
+import threading
+from uuid import uuid4
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -39,6 +43,12 @@ FRONTEND_SCRIPTS = FRONTEND_SRC / "scripts"
 
 app = Flask(__name__, static_folder=str(FRONTEND_SRC), static_url_path='')
 CORS(app)
+
+PREVIEW_ROOT = (REPO_ROOT / "temp" / "preview")
+PREVIEW_ROOT.mkdir(parents=True, exist_ok=True)
+_PREVIEW_REGISTRY = {}
+_PREVIEW_LOCK = threading.Lock()
+_PREVIEW_TTL = timedelta(hours=1)
 
 # Add backend directory to import path
 sys.path.insert(0, str(BACKEND_ROOT))
@@ -95,6 +105,72 @@ def print_model_metrics():
 print_model_metrics()
 
 
+def _cleanup_preview_registry(force=False):
+    """Remove expired preview files and optionally force a full cleanup."""
+    if force:
+        for orphan in PREVIEW_ROOT.glob('*'):
+            if orphan.is_file():
+                try:
+                    orphan.unlink()
+                except OSError:
+                    pass
+        with _PREVIEW_LOCK:
+            _PREVIEW_REGISTRY.clear()
+        return
+
+    now = datetime.utcnow()
+    stale_entries = []
+    with _PREVIEW_LOCK:
+        items = list(_PREVIEW_REGISTRY.items())
+        for token, meta in items:
+            path = meta.get('path')
+            expires_at = meta.get('expires')
+            missing = not path or not os.path.exists(path)
+            expired = expires_at is not None and expires_at <= now
+            if missing or expired:
+                stale_entries.append((token, path))
+                _PREVIEW_REGISTRY.pop(token, None)
+
+    for _, path in stale_entries:
+        if path and os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+def _stage_preview_file(source_path, mime_type='video/mp4'):
+    """Copy a processed video into the preview cache and return an access token."""
+    if not source_path or not os.path.exists(source_path):
+        return None
+
+    _cleanup_preview_registry()
+
+    token = uuid4().hex
+    extension = Path(source_path).suffix or '.mp4'
+    dest_path = PREVIEW_ROOT / f"{token}{extension}"
+
+    try:
+        shutil.copy2(source_path, dest_path)
+    except Exception as copy_error:
+        print(f"[PREVIEW] Failed to stage preview file: {copy_error}")
+        return None
+
+    expires_at = datetime.utcnow() + _PREVIEW_TTL
+    with _PREVIEW_LOCK:
+        _PREVIEW_REGISTRY[token] = {
+            'path': str(dest_path),
+            'mime': mime_type,
+            'expires': expires_at,
+        }
+
+    print(f"[PREVIEW] Staged preview asset at {dest_path}")
+    return token
+
+
+_cleanup_preview_registry(force=True)
+
+
 def encode_image_to_base64(image_obj):
     """Convert a PIL image or numpy array into a base64 PNG string."""
     if image_obj is None:
@@ -120,6 +196,27 @@ def encode_image_to_base64(image_obj):
         return result
     except Exception as encode_error:
         print(f"[WARNING] Failed to encode image to base64: {encode_error}")
+        return None
+
+
+def decode_base64_image(image_str, mode=None):
+    """Decode a base64-encoded image string (optionally data URI) into a numpy array."""
+    if not image_str or not isinstance(image_str, str):
+        return None
+
+    try:
+        if image_str.startswith("data:"):
+            _, image_data = image_str.split(",", 1)
+        else:
+            image_data = image_str
+
+        binary = base64.b64decode(image_data)
+        img = Image.open(io.BytesIO(binary))
+        if mode:
+            img = img.convert(mode)
+        return np.array(img)
+    except Exception as decode_error:
+        print(f"[WARNING] Failed to decode base64 image: {decode_error}")
         return None
 
 # ============================================================================
@@ -440,7 +537,13 @@ def serve_styles(filename):
 def serve_scripts(filename):
     """Serve JavaScript files"""
     try:
-        return send_from_directory(str(FRONTEND_SCRIPTS.resolve()), filename)
+        resp = send_from_directory(str(FRONTEND_SCRIPTS.resolve()), filename)
+        # Prevent aggressive browser caching during development so frontend JS edits
+        # are reflected immediately. Use conservative no-cache headers.
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
     except:
         return '', 404
 
@@ -571,11 +674,34 @@ def health_check():
         'message': 'API is ready'
     })
 
+
+@app.route('/api/preview/<token>', methods=['GET'])
+def serve_preview(token):
+    """Serve a staged preview video to the browser."""
+    _cleanup_preview_registry()
+
+    with _PREVIEW_LOCK:
+        meta = _PREVIEW_REGISTRY.get(token)
+
+    if not meta:
+        return jsonify({'error': 'Preview expired or missing'}), 404
+
+    path = meta.get('path')
+    if not path or not os.path.exists(path):
+        with _PREVIEW_LOCK:
+            _PREVIEW_REGISTRY.pop(token, None)
+        return jsonify({'error': 'Preview expired or missing'}), 404
+
+    mime = meta.get('mime') or 'video/mp4'
+    return send_file(path, mimetype=mime, as_attachment=False, conditional=True)
+
 @app.route('/api/analyze-video', methods=['POST'])
 def analyze_video():
     """Analyze video with real TensorFlow model or fallback demo mode"""
     tmpfile_path = None
     audio_tmp_path = None
+    converted_file_path = None
+    preview_url = None
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
@@ -599,13 +725,39 @@ def analyze_video():
         # Load models
         video_model, audio_model = load_models_lazy()
         
+        filename_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ''
+        original_ext = filename_ext if filename_ext else '.mp4'
+
         # Save file temporarily for analysis
-        tmpfd, tmpfile_path = tempfile.mkstemp(suffix='.mp4')
+        tmpfd, tmpfile_path = tempfile.mkstemp(suffix=original_ext)
         os.close(tmpfd)
         file.save(tmpfile_path)
+
+        working_video_path = tmpfile_path
+        if original_ext in ['.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm']:
+            try:
+                from core.utils import convert_video_to_mp4
+            except ImportError:
+                convert_video_to_mp4 = None
+
+            if convert_video_to_mp4 is not None:
+                print(f"[VIDEO] Converting {original_ext} upload to MP4 for browser compatibility...")
+                converted_file_path = convert_video_to_mp4(tmpfile_path)
+                if converted_file_path and os.path.exists(converted_file_path):
+                    working_video_path = converted_file_path
+                    print(f"[VIDEO] Conversion successful: {converted_file_path}")
+                else:
+                    print("[VIDEO] Conversion failed; continuing with original file.")
+            else:
+                print("[VIDEO] Conversion utility unavailable; continuing with original file.")
+
+        if working_video_path.lower().endswith('.mp4'):
+            preview_token = _stage_preview_file(working_video_path, mime_type='video/mp4')
+            if preview_token:
+                preview_url = f"/api/preview/{preview_token}"
         
-        # Extract video metadata
-        video_metadata = extract_video_metadata(tmpfile_path)
+        # Extract video metadata from the analysis source
+        video_metadata = extract_video_metadata(working_video_path)
         
         # Try real inference first (this will use Grad-CAM heatmaps)
         print(f"[VIDEO] Attempting real model inference for accurate heatmaps...")
@@ -617,7 +769,7 @@ def analyze_video():
                 print(f"[VIDEO] [PASS] Video model is loaded, running Grad-CAM analysis...")
                 result = infer_video(
                     video_model,
-                    tmpfile_path,
+                    working_video_path,
                     every_n_frames=15,
                     max_frames=20,
                     heatmap_frames=heatmap_frames,
@@ -645,7 +797,7 @@ def analyze_video():
                 if audio_model is not None:
                     try:
                         print("[AUDIO] Extracting audio track from video for joint analysis...")
-                        audio_tmp_path = extract_audio_from_video(tmpfile_path, target_sr=16000, max_duration=10.0)
+                        audio_tmp_path = extract_audio_from_video(working_video_path, target_sr=16000, max_duration=10.0)
                         if audio_tmp_path:
                             audio_metadata = extract_audio_metadata(audio_tmp_path)
                             audio_analysis = infer_audio(audio_model, audio_tmp_path)
@@ -679,13 +831,29 @@ def analyze_video():
 
                 # Convert heatmaps and original frames to base64 and combine into objects
                 heatmap_objects = []
+                heatmap_overlays = result.get('heatmap_overlays', [])
+
                 for i, hm in enumerate(heatmaps):
                     try:
+                        print(f"[ENCODE] Processing heatmap {i}: type={type(hm)}, shape={getattr(hm, 'shape', 'N/A')}, dtype={getattr(hm, 'dtype', 'N/A')}")
+                        
                         if isinstance(hm, np.ndarray):
-                            if hm.max() <= 1.0:
-                                hm_pil = Image.fromarray((hm * 255).astype('uint8'))
+                            # Ensure proper data type and range
+                            if hm.dtype == np.float32 or hm.dtype == np.float64:
+                                if hm.max() <= 1.0:
+                                    hm_uint8 = (hm * 255).astype(np.uint8)
+                                else:
+                                    hm_uint8 = np.clip(hm, 0, 255).astype(np.uint8)
                             else:
-                                hm_pil = Image.fromarray(hm.astype('uint8'))
+                                hm_uint8 = hm.astype(np.uint8)
+                            
+                            # Ensure we have the right shape (H, W, C)
+                            if len(hm_uint8.shape) == 3 and hm_uint8.shape[2] == 3:
+                                hm_pil = Image.fromarray(hm_uint8, mode='RGB')
+                            elif len(hm_uint8.shape) == 2:
+                                hm_pil = Image.fromarray(hm_uint8, mode='L')
+                            else:
+                                hm_pil = Image.fromarray(hm_uint8)
                         else:
                             hm_pil = hm
 
@@ -693,12 +861,27 @@ def analyze_video():
                         hm_pil.save(hm_buffer, format='PNG')
                         hm_buffer.seek(0)
                         heatmap_b64 = base64.b64encode(hm_buffer.getvalue()).decode()
+                        print(f"[ENCODE] ✅ Heatmap {i} encoded successfully ({len(heatmap_b64)} chars)")
 
                         original_b64 = None
+                        overlay_b64 = None
                         if i < len(original_frames):
                             orig_frame = original_frames[i]
                             if isinstance(orig_frame, np.ndarray):
-                                orig_pil = Image.fromarray(orig_frame.astype('uint8'))
+                                if orig_frame.dtype == np.float32 or orig_frame.dtype == np.float64:
+                                    if orig_frame.max() <= 1.0:
+                                        orig_uint8 = (orig_frame * 255).astype(np.uint8)
+                                    else:
+                                        orig_uint8 = np.clip(orig_frame, 0, 255).astype(np.uint8)
+                                else:
+                                    orig_uint8 = orig_frame.astype(np.uint8)
+                                
+                                if len(orig_uint8.shape) == 3 and orig_uint8.shape[2] == 3:
+                                    orig_pil = Image.fromarray(orig_uint8, mode='RGB')
+                                elif len(orig_uint8.shape) == 2:
+                                    orig_pil = Image.fromarray(orig_uint8, mode='L')
+                                else:
+                                    orig_pil = Image.fromarray(orig_uint8)
                             else:
                                 orig_pil = orig_frame
 
@@ -706,6 +889,36 @@ def analyze_video():
                             orig_pil.save(orig_buffer, format='PNG')
                             orig_buffer.seek(0)
                             original_b64 = base64.b64encode(orig_buffer.getvalue()).decode()
+                            print(f"[ENCODE] ✅ Original frame {i} encoded successfully ({len(original_b64)} chars)")
+
+                        if i < len(heatmap_overlays):
+                            overlay_frame = heatmap_overlays[i]
+                            try:
+                                if isinstance(overlay_frame, np.ndarray):
+                                    if overlay_frame.dtype == np.float32 or overlay_frame.dtype == np.float64:
+                                        if overlay_frame.max() <= 1.0:
+                                            overlay_uint8 = (overlay_frame * 255).astype(np.uint8)
+                                        else:
+                                            overlay_uint8 = np.clip(overlay_frame, 0, 255).astype(np.uint8)
+                                    else:
+                                        overlay_uint8 = overlay_frame.astype(np.uint8)
+
+                                    if len(overlay_uint8.shape) == 3 and overlay_uint8.shape[2] == 3:
+                                        overlay_pil = Image.fromarray(overlay_uint8, mode='RGB')
+                                    elif len(overlay_uint8.shape) == 2:
+                                        overlay_pil = Image.fromarray(overlay_uint8, mode='L')
+                                    else:
+                                        overlay_pil = Image.fromarray(overlay_uint8)
+                                else:
+                                    overlay_pil = overlay_frame
+
+                                overlay_buffer = io.BytesIO()
+                                overlay_pil.save(overlay_buffer, format='PNG')
+                                overlay_buffer.seek(0)
+                                overlay_b64 = base64.b64encode(overlay_buffer.getvalue()).decode()
+                                print(f"[ENCODE] ✅ Overlay frame {i} encoded successfully ({len(overlay_b64)} chars)")
+                            except Exception as overlay_err:
+                                print(f"[ENCODE] ⚠️ Overlay encoding failed for frame {i}: {overlay_err}")
 
                         meta = frame_metadata[i] if i < len(frame_metadata) else {}
                         frame_number = meta.get('frame_number', i)
@@ -717,13 +930,16 @@ def analyze_video():
                             'sequence_index': i,
                             'original_frame': f'data:image/png;base64,{original_b64}' if original_b64 else None,
                             'heatmap': f'data:image/png;base64,{heatmap_b64}',
+                            'overlay': f'data:image/png;base64,{overlay_b64}' if overlay_b64 else None,
                             'face_detected': True,
                             'timestamp': float(timestamp) if timestamp is not None else None,
                             'timestamp_label': format_timestamp_label(timestamp),
                             'relative_position': float(relative_position) if relative_position is not None else None,
                         })
                     except Exception as e:
-                        print(f"[WARNING] Heatmap encoding error: {e}")
+                        print(f"[ERROR] Heatmap encoding error for frame {i}: {e}")
+                        import traceback
+                        traceback.print_exc()
 
                 print(f"[VIDEO] [PASS] Real inference successful: video_score={video_score:.2f}, heatmaps={len(heatmap_objects)}")
 
@@ -747,6 +963,7 @@ def analyze_video():
                     'audio_file_metadata': audio_metadata,
                     'audio_heatmap': f'data:image/png;base64,{audio_heatmap_b64}' if audio_heatmap_b64 else None,
                     'audio_spectrogram': f'data:image/png;base64,{audio_spectrogram_b64}' if audio_spectrogram_b64 else None,
+                    'preview_url': preview_url,
                 }
 
                 print(f"\n[RESPONSE] 📤 Sending response with:")
@@ -827,15 +1044,11 @@ def analyze_video():
             print("="*80 + "\n")
             print(f"[VIDEO] Falling back to DEMO MODE with realistic face extraction...")
             
-            # Import numpy at module level for demo mode fallback
-            import numpy as np
-            
             # Generate heatmaps with real extracted faces from video
             demo_heatmaps = []
             try:
                 import cv2
                 import mediapipe as mp
-                from PIL import Image, ImageDraw, ImageFilter
                 
                 # Try MediaPipe first, fallback to Haar Cascade if it fails
                 use_mediapipe = True
@@ -848,7 +1061,7 @@ def analyze_video():
                     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
                 
                 # Open video
-                cap = cv2.VideoCapture(tmpfile_path)
+                cap = cv2.VideoCapture(working_video_path)
                 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 
@@ -1100,7 +1313,8 @@ def analyze_video():
                 'model_status': 'DEMO_MODE',
                 'message': '[OK] Analysis Complete (Demo Mode)',
                 'status': 'success',
-                'file_metadata': video_metadata  # [PASS] Include video metadata
+                'file_metadata': video_metadata,  # [PASS] Include video metadata
+                'preview_url': preview_url,
             }), 200
         
     except Exception as e:
@@ -1281,6 +1495,117 @@ def analyze_audio():
                 os.remove(tmpfile_path)
             except:
                 pass
+
+
+@app.route('/api/generate-report', methods=['POST'])
+def generate_report_endpoint():
+    """Generate a PDF report using existing analysis artifacts supplied by the frontend."""
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({'error': 'Invalid or empty JSON payload'}), 400
+
+    try:
+        media_type = str(payload.get('media_type') or 'video').lower()
+        if media_type not in {'video', 'audio', 'combined'}:
+            media_type = 'video'
+
+        filename = payload.get('filename') or f'{media_type}_analysis'
+
+        def _decode_collection(items, primary_key=None, mode=None):
+            decoded = []
+            if not items:
+                return decoded
+            if not isinstance(items, list):
+                items = [items]
+            for entry in items:
+                candidate = None
+                if isinstance(entry, str):
+                    candidate = entry
+                elif isinstance(entry, dict):
+                    if primary_key and entry.get(primary_key):
+                        candidate = entry.get(primary_key)
+                    else:
+                        for key_option in ('heatmap', 'image', 'data', 'src', 'value'):
+                            if entry.get(key_option):
+                                candidate = entry[key_option]
+                                break
+                if candidate:
+                    decoded_img = decode_base64_image(candidate, mode=mode)
+                    if decoded_img is not None:
+                        decoded.append(decoded_img)
+            return decoded
+
+        heatmap_arrays = _decode_collection(payload.get('heatmaps'), primary_key='heatmap', mode='RGBA')
+        original_frame_arrays = _decode_collection(payload.get('original_frames'), mode='RGB')
+
+        # If original frames were embedded alongside heatmap objects, capture them
+        if not original_frame_arrays and isinstance(payload.get('heatmaps'), list):
+            for entry in payload['heatmaps']:
+                if isinstance(entry, dict):
+                    original_img = entry.get('original_frame') or entry.get('face_image')
+                    decoded_orig = decode_base64_image(original_img, mode='RGB')
+                    if decoded_orig is not None:
+                        original_frame_arrays.append(decoded_orig)
+
+        spec_img = decode_base64_image(payload.get('spectrogram') or payload.get('audio_spectrogram'), mode='RGB')
+        audio_heatmap = decode_base64_image(payload.get('audio_heatmap') or payload.get('heatmap_viz'), mode='RGBA')
+
+        def _safe_float(value, default=None):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        video_score_value = _safe_float(payload.get('video_score'), None)
+        audio_score_value = _safe_float(payload.get('audio_score'), None)
+
+        analysis_results = {
+            'video_score': video_score_value,
+            'audio_score': audio_score_value,
+            'final_score': _safe_float(payload.get('final_score')),
+            'heatmaps': heatmap_arrays,
+            'original_frames': original_frame_arrays,
+            'spec_img': spec_img,
+            'audio_heatmap': audio_heatmap,
+        }
+
+        for key in ('findings', 'report_findings', 'detailed_findings', 'frame_metadata', 'verdict', 'explanation'):
+            if key in payload:
+                analysis_results[key] = payload[key]
+
+        video_metadata = payload.get('file_metadata') or {}
+        audio_metadata = payload.get('audio_metadata') or payload.get('audio_file_metadata') or {}
+
+        from core.generate_report import generate_report_for_media
+
+        report_path = generate_report_for_media(
+            media_type,
+            filename,
+            analysis_results=analysis_results,
+            video_metadata=video_metadata,
+            audio_metadata=audio_metadata,
+        )
+
+        with open(report_path, 'rb') as report_file:
+            pdf_bytes = report_file.read()
+
+        try:
+            os.remove(report_path)
+        except OSError:
+            pass
+
+        download_name = f"RevealAI_Report_{Path(filename).stem or 'analysis'}.pdf"
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="{download_name}"'
+        return response
+    except Exception as gen_err:
+        print(f"[REPORT] Failed to generate report: {gen_err}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to generate report'}), 500
+
+
 
 # ============================================================================
 # ERROR HANDLERS

@@ -61,11 +61,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup click handler for profile to show preview
     if (profileEl) {
+        const shouldTogglePreview = () => {
+            const path = (window.location.pathname || '').toLowerCase();
+            return path === '/' || path.endsWith('/index.html');
+        };
+
         profileEl.addEventListener('click', (e) => {
-            if (isUserLoggedIn) {
+            if (!isUserLoggedIn) {
+                return;
+            }
+
+            const previewDiv = document.getElementById('profile-hover-preview');
+            if (shouldTogglePreview() && previewDiv) {
                 e.preventDefault();
                 e.stopPropagation();
                 toggleProfilePreview();
+            } else {
+                // ensure redirect to profile page on supporting routes
+                profileEl.setAttribute('href', '/profile.html');
             }
         });
     }
@@ -119,7 +132,7 @@ document.addEventListener('click', (event) => {
 document.addEventListener('click', (event) => {
     if (event.target.href && event.target.href.includes('profile')) {
         event.preventDefault();
-        window.location.href = '/profile';
+        window.location.href = '/profile.html';
     }
 });
 

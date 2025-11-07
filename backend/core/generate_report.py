@@ -77,7 +77,7 @@ class SimpleReport:
         self.pdf.set_text_color(0, 0, 0)
         self.pdf.set_draw_color(0, 0, 0)
 
-    def add_result(self, filename, video_score, audio_score, final_score, heatmaps=[], original_frames=[], spec_img=None, audio_heatmap=None, verdict="uncertain", findings=None):
+    def add_result(self, filename, video_score, audio_score, final_score, heatmaps=None, original_frames=None, spec_img=None, audio_heatmap=None, verdict="uncertain", findings=None, video_metadata=None, audio_metadata=None, show_video_score=True, show_audio_score=True):
         """
         Add comprehensive analysis result page
         
@@ -92,7 +92,14 @@ class SimpleReport:
             audio_heatmap: Audio heatmap visualization (large professional heatmap for display)
             verdict: Detection verdict string
             findings: Dict with 'summary' and 'details' (list of findings)
+            video_metadata: Optional dict of video metadata details
+            audio_metadata: Optional dict of audio metadata details
         """
+        heatmaps = heatmaps or []
+        original_frames = original_frames or []
+        video_metadata = video_metadata or {}
+        audio_metadata = audio_metadata or {}
+
         # --- Page 1: Summary & Verdict ---
         self.pdf.add_page()
         
@@ -144,6 +151,24 @@ class SimpleReport:
         self.pdf.cell(50, 7, "Filename:", 0, 0)
         self.pdf.cell(0, 7, str(filename)[:60], 0, 1)
         
+        # Include metadata tables when provided
+        def _render_metadata_section(title, metadata_dict):
+            if not metadata_dict:
+                return
+            self.pdf.ln(4)
+            self.pdf.set_font("Arial", 'B', size=11)
+            self.pdf.set_text_color(0, 100, 100)
+            self.pdf.cell(0, 7, title, ln=True)
+            self.pdf.set_text_color(0, 0, 0)
+            self.pdf.set_font("Arial", size=10)
+            for key, value in metadata_dict.items():
+                label = str(key).replace('_', ' ').title()
+                self.pdf.cell(55, 6, f"{label}:", 0, 0)
+                self.pdf.cell(0, 6, str(value), 0, 1)
+
+        _render_metadata_section("Video Metadata", video_metadata)
+        _render_metadata_section("Audio Metadata", audio_metadata)
+
         self.pdf.ln(6)
         self.pdf.set_font("Arial", 'B', size=12)
         self.pdf.set_text_color(0, 100, 100)  # Cyan color
@@ -154,12 +179,18 @@ class SimpleReport:
         # Score table with better formatting
         self.pdf.cell(70, 7, "Video Analysis Score:", 0, 0)
         self.pdf.set_text_color(0, 150, 150)  # Cyan for values
-        self.pdf.cell(50, 7, f"{video_score:.1%}", 0, 1)
+        if show_video_score:
+            self.pdf.cell(50, 7, f"{video_score:.1%}", 0, 1)
+        else:
+            self.pdf.cell(50, 7, "N/A", 0, 1)
         self.pdf.set_text_color(0, 0, 0)
         
         self.pdf.cell(70, 7, "Audio Analysis Score:", 0, 0)
         self.pdf.set_text_color(0, 150, 150)  # Cyan for values
-        self.pdf.cell(50, 7, f"{audio_score:.1%}", 0, 1)
+        if show_audio_score:
+            self.pdf.cell(50, 7, f"{audio_score:.1%}", 0, 1)
+        else:
+            self.pdf.cell(50, 7, "N/A", 0, 1)
         self.pdf.set_text_color(0, 0, 0)
         
         self.pdf.set_font("Arial", 'B', size=11)
@@ -518,20 +549,40 @@ def generate_report_for_media(media_type, filename, analysis_results, video_meta
     report.add_cover()
 
     # Extract data from analysis results
-    video_score = analysis_results.get('video_score', 0.0)
-    audio_score = analysis_results.get('audio_score', 0.0)
+    video_score_raw = analysis_results.get('video_score')
+    audio_score_raw = analysis_results.get('audio_score')
+
+    try:
+        video_score = float(video_score_raw) if video_score_raw is not None else 0.0
+    except (TypeError, ValueError):
+        video_score = 0.0
+        video_score_raw = None
+
+    try:
+        audio_score = float(audio_score_raw) if audio_score_raw is not None else 0.0
+    except (TypeError, ValueError):
+        audio_score = 0.0
+        audio_score_raw = None
+
+    show_video_score = video_score_raw is not None
+    show_audio_score = audio_score_raw is not None
     heatmaps = analysis_results.get('heatmaps', [])
+    heatmap_overlays = analysis_results.get('heatmap_overlays')
+    if heatmap_overlays:
+        heatmaps = heatmap_overlays
     original_frames = analysis_results.get('original_frames', [])
     spec_img = analysis_results.get('spec_img')
     audio_heatmap = analysis_results.get('audio_heatmap')
 
     # Combine scores (60% video, 40% audio)
-    if media_type == 'video':
-        final_score = video_score
-    elif media_type == 'audio':
-        final_score = audio_score
-    else: # Combined
-        final_score = (video_score * 0.6) + (audio_score * 0.4)
+    final_score = analysis_results.get('final_score')
+    if final_score is None:
+        if media_type == 'video':
+            final_score = video_score
+        elif media_type == 'audio':
+            final_score = audio_score
+        else:  # Combined
+            final_score = (video_score * 0.6) + (audio_score * 0.4)
 
     # Determine verdict
     if final_score > 0.7:
@@ -540,6 +591,25 @@ def generate_report_for_media(media_type, filename, analysis_results, video_meta
         verdict = "Suspicious"
     else:
         verdict = "Likely Authentic"
+
+    verdict_override = analysis_results.get('verdict')
+    if isinstance(verdict_override, str) and verdict_override.strip():
+        verdict = verdict_override
+
+    findings_payload = (
+        analysis_results.get('report_findings')
+        or analysis_results.get('findings')
+        or analysis_results.get('detailed_findings')
+    )
+    if isinstance(findings_payload, str):
+        findings_payload = {'explanation': findings_payload}
+    elif isinstance(findings_payload, list):
+        findings_payload = {'findings': findings_payload}
+    elif findings_payload and not isinstance(findings_payload, dict):
+        # Unknown structure, convert to string for safety
+        findings_payload = {'explanation': str(findings_payload)}
+    if not findings_payload:
+        findings_payload = {'explanation': f"The {media_type} analysis resulted in a score of {final_score:.2f}."}
 
     report.add_result(
         filename=filename,
@@ -551,7 +621,11 @@ def generate_report_for_media(media_type, filename, analysis_results, video_meta
         spec_img=spec_img,
         audio_heatmap=audio_heatmap,
         verdict=verdict,
-        findings={'explanation': f"The {media_type} analysis resulted in a score of {final_score:.2f}."}
+        findings=findings_payload,
+        video_metadata=video_metadata,
+        audio_metadata=audio_metadata,
+        show_video_score=show_video_score,
+        show_audio_score=show_audio_score,
     )
 
     return report.output()

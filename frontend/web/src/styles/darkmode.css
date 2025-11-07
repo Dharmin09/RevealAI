@@ -14,6 +14,83 @@ body {
     color: #1f2937 !important;
 }
 
+/* Light mode footer styling - maximum specificity */
+html:not(.dark) footer.bg-gray-900 {
+    background-color: #ffffff !important; /* white background in light mode */
+    color: #334155 !important;
+    border-top-color: #e5e7eb !important; /* light gray border */
+}
+
+/* Override footer text colors in light mode */
+html:not(.dark) footer.text-gray-300,
+html:not(.dark) footer .text-gray-300,
+html:not(.dark) .bg-gray-900.text-gray-300 {
+    color: #334155 !important;
+}
+
+/* Override footer's border-indigo-600 */
+footer.border-indigo-600 {
+    border-top-color: #cbd5e1 !important; /* light slate border for light mode */
+}
+
+/* Light mode footer text colors */
+html:not(.dark) footer .text-white {
+    color: #1e293b !important; /* dark slate for headings */
+}
+
+html:not(.dark) footer .text-gray-400 {
+    color: #64748b !important; /* medium gray for labels */
+}
+
+html:not(.dark) footer .text-gray-500 {
+    color: #64748b !important; /* medium gray for copyright */
+}
+
+html:not(.dark) footer .text-gray-700 {
+    color: #475569 !important; /* slate gray */
+}
+
+html:not(.dark) footer .text-indigo-400 {
+    color: #6366f1 !important; /* indigo for icons and links */
+}
+
+html:not(.dark) footer .text-purple-400 {
+    color: #8b5cf6 !important; /* purple for accents */
+}
+
+html:not(.dark) footer .text-purple-300 {
+    color: #a78bfa !important; /* light purple */
+}
+
+html:not(.dark) footer .border-gray-700 {
+    border-color: #e2e8f0 !important; /* light border */
+}
+
+/* Light mode footer hover colors */
+html:not(.dark) footer a:hover {
+    color: #4f46e5 !important; /* darker indigo on hover */
+}
+
+html:not(.dark) footer .hover\:text-indigo-400:hover {
+    color: #4f46e5 !important; /* darker indigo on hover */
+}
+
+html:not(.dark) footer .hover\:text-indigo-300:hover {
+    color: #6366f1 !important; /* indigo on hover */
+}
+
+/* Light mode footer links */
+html:not(.dark) footer a {
+    color: #475569 !important; /* slate gray for all footer links */
+}
+
+/* Ensure all footer text is dark in light mode */
+html:not(.dark) footer p, 
+html:not(.dark) footer span, 
+html:not(.dark) footer div {
+    color: #475569 !important; /* inherit dark color */
+}
+
 html.dark {
     color-scheme: dark;
     --dark-bg-primary: #000000;
@@ -57,6 +134,64 @@ html.dark nav a:hover, html.dark nav li a:hover { color: var(--dark-accent-purpl
 /* Containers */
 html.dark .card, html.dark .bg-white, html.dark .bg-gray-50, html.dark .bg-gray-100, html.dark .info-box, html.dark .content-section { background-color: var(--dark-bg-tertiary) !important; color: var(--dark-text-primary) !important; border-color: var(--dark-border) !important; }
 
+/* Light mode containers - ensure white backgrounds */
+html:not(.dark) .card, 
+html:not(.dark) .bg-white, 
+html:not(.dark) .bg-gray-50, 
+html:not(.dark) .bg-gray-100, 
+html:not(.dark) .info-box, 
+html:not(.dark) .content-section,
+html:not(.dark) .bg-gray-100,
+html:not(.dark) .bg-gray-50 {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+    border-color: #e5e7eb !important;
+}
+
+/* Ensure all cards and containers are white in light mode */
+html:not(.dark) .card,
+html:not(.dark) article,
+html:not(.dark) .rounded-2xl,
+html:not(.dark) [class*="bg-white"],
+html:not(.dark) [class*="bg-gray-50"],
+html:not(.dark) [class*="bg-gray-100"] {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+}
+
+/* Force white backgrounds for analysis cards and result boxes */
+html:not(.dark) .flex.flex-col.gap-6,
+html:not(.dark) .bg-white.dark\:bg-\[#050505\],
+html:not(.dark) [style*="min-height"],
+html:not(.dark) article[class*="bg-white"] {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+    border-color: #e5e7eb !important;
+}
+
+/* Light mode - force specific bg-black elements to be white */
+html:not(.dark) .bg-black {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+    border: 1px solid #e5e7eb !important;
+}
+
+html:not(.dark) .bg-black .text-white,
+html:not(.dark) .bg-black .text-gray-200 {
+    color: #1f2937 !important;
+}
+
+/* Light mode gradient sections - ensure white text is visible */
+html:not(.dark) .bg-gradient-to-r.from-indigo-600.to-purple-600 {
+    background: linear-gradient(to right, #4f46e5, #9333ea) !important;
+}
+
+html:not(.dark) .bg-gradient-to-r.from-indigo-600.to-purple-600 h2,
+html:not(.dark) .bg-gradient-to-r.from-indigo-600.to-purple-600 p,
+html:not(.dark) .bg-gradient-to-r.from-indigo-600.to-purple-600 .text-white {
+    color: #ffffff !important;
+}
+
 /* Headings and Text */
 html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 { color: var(--dark-text-primary) !important; }
 html.dark p { color: var(--dark-text-primary) !important; }
@@ -78,6 +213,25 @@ html.dark a:hover { color: var(--dark-accent-purple-light) !important; }
 html.dark button, html.dark .btn, html.dark .btn-primary, html.dark input[type="button"], html.dark input[type="submit"] { background-color: var(--dark-accent-purple) !important; color: var(--dark-text-primary) !important; border-color: transparent !important; }
 html.dark button:hover, html.dark .btn:hover { background-color: var(--dark-accent-purple-light) !important; }
 html.dark .btn-danger, html.dark .btn-red, html.dark .danger, html.dark .delete, html.dark button.danger { background-color: var(--dark-accent-red) !important; color: #ffffff !important; border-color: transparent !important; }
+
+/* Override action buttons in analysis results */
+html.dark #actionButtonsContainer #downloadReportBtn {
+    background-color: #16a34a !important; /* green-600 */
+    color: #ffffff !important;
+}
+
+html.dark #actionButtonsContainer #downloadReportBtn:hover {
+    background-color: #15803d !important; /* green-700 */
+}
+
+html.dark #actionButtonsContainer #newAnalysisBtn {
+    background-color: #4b5563 !important; /* gray-600 */
+    color: #ffffff !important;
+}
+
+html.dark #actionButtonsContainer #newAnalysisBtn:hover {
+    background-color: #374151 !important; /* gray-700 */
+}
 html.dark .btn-danger:hover, html.dark .btn-red:hover { background-color: #dc2626 !important; }
 
 /* Background Colors */
@@ -124,6 +278,8 @@ html.dark footer a:hover { color: var(--dark-accent-purple-light) !important; }
 html.dark footer h3, html.dark footer h4 { color: var(--dark-text-primary) !important; }
 html.dark footer .bg-indigo-600 { background-color: var(--dark-accent-purple) !important; }
 html.dark footer .bg-indigo-600:hover { background-color: var(--dark-accent-purple-light) !important; }
+html.dark .footer-address { color: var(--dark-accent-purple) !important; }
+html.dark .footer-address-secondary { color: var(--dark-accent-purple-light) !important; }
 
 /* Utilities */
 html.dark .bg-white\/80 { background-color: rgba(11, 11, 11, 0.8) !important; }

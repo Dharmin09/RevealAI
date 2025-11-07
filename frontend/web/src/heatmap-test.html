@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heatmap Display Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #fff;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #a855f7;
+            margin-bottom: 30px;
+        }
+        
+        .frame-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            background: #1a1a2e;
+            border: 1px solid #7c3aed;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .frame-card {
+            background: #0f0f1e;
+            border: 1px solid #6b21a8;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .frame-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #c084fc;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        .frame-image {
+            width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid #7c3aed;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+        
+        .slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #1e40af, #7c3aed, #dc2626);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.8);
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.8);
+        }
+        
+        .blend-label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+        }
+        
+        .blend-value {
+            font-weight: bold;
+            color: #a855f7;
+            font-family: monospace;
+            min-width: 40px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Frame Analysis with Thermal Heatmap Overlay</h1>
+    <p style="text-align: center; color: #ccc; margin-bottom: 40px;">
+        Use the sliders to blend heatmaps with original frames. 
+        Move left to see original (0%), right to see AI detection map (100%).
+    </p>
+    
+    <div id="framesContainer"></div>
+    
+    <script>
+        // Fetch analysis results from API
+        const API_URL = 'http://localhost:5000/api/analyze-video';
+        const VIDEO_FILE = 'e:\\Datasets\\video\\raw\\real\\000.mp4';
+        
+        async function loadFrames() {
+            try {
+                // Create form data with video file
+                const formData = new FormData();
+                const response = await fetch(VIDEO_FILE);
+                const blob = await response.blob();
+                formData.append('file', new File([blob], '000.mp4', { type: 'video/mp4' }));
+                formData.append('heatmap_frames', '2');
+                
+                // Upload to API
+                const uploadResponse = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await uploadResponse.json();
+                const heatmaps = result.heatmaps || [];
+                
+                console.log('Got', heatmaps.length, 'heatmaps');
+                
+                const container = document.getElementById('framesContainer');
+                container.innerHTML = '';
+                
+                // Process frames in pairs (2 per row)
+                for (let i = 0; i < heatmaps.length; i += 2) {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'frame-container';
+                    
+                    // Add up to 2 frames per row
+                    for (let j = 0; j < 2 && i + j < heatmaps.length; j++) {
+                        const frameData = heatmaps[i + j];
+                        const frameCard = document.createElement('div');
+                        frameCard.className = 'frame-card';
+                        
+                        const frameNum = frameData.frame || (i + j + 1);
+                        const timestamp = frameData.timestamp_label || frameData.timestamp || '—';
+                        
+                        frameCard.innerHTML = `
+                            <div class="frame-title">Frame ${frameNum} @ ${timestamp}s</div>
+                            <div style="position: relative; overflow: hidden; border-radius: 6px; background: #000;">
+                                <img src="${frameData.original_frame}" alt="Original" style="width: 100%; display: block;" data-original-frame>
+                                <img src="${frameData.heatmap}" alt="Heatmap" 
+                                     style="width: 100%; position: absolute; top: 0; left: 0; mix-blend-mode: screen; opacity: 0.65;" 
+                                     data-heatmap-overlay>
+                            </div>
+                            <div class="slider-container" style="margin-top: 12px;">
+                                <span class="blend-label">Blend</span>
+                                <input type="range" min="0" max="100" value="65" class="slider" data-blend-slider>
+                                <span class="blend-value" data-blend-value>65%</span>
+                            </div>
+                        `;
+                        
+                        // Add slider functionality
+                        const slider = frameCard.querySelector('[data-blend-slider]');
+                        const heatmapImg = frameCard.querySelector('[data-heatmap-overlay]');
+                        const blendValue = frameCard.querySelector('[data-blend-value]');
+                        
+                        slider.addEventListener('input', (e) => {
+                            const opacity = e.target.value / 100;
+                            heatmapImg.style.opacity = opacity;
+                            blendValue.textContent = e.target.value + '%';
+                        });
+                        
+                        rowDiv.appendChild(frameCard);
+                    }
+                    
+                    container.appendChild(rowDiv);
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('framesContainer').innerHTML = '<p style="color: red;">Error loading frames. Make sure the API is running.</p>';
+            }
+        }
+        
+        // Load frames on page load
+        window.addEventListener('DOMContentLoaded', loadFrames);
+    </script>
+</body>
+</html>
