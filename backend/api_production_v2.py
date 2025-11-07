@@ -23,9 +23,16 @@ import shutil
 import threading
 from uuid import uuid4
 
+import logging
+import warnings
+import subprocess
+
 # Suppress warnings
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+# Suppress absl warnings from TensorFlow
+logging.getLogger('absl').setLevel(logging.ERROR)
 
 # Disable Flask output buffering for immediate logging
 os.environ['PYTHONUNBUFFERED'] = '1'
@@ -81,26 +88,53 @@ except ImportError:
 
 def print_model_metrics():
     """Prints the model performance metrics in a formatted table."""
-    print("\n" + "="*80)
-    print("MODEL PERFORMANCE METRICS (on private test set)")
-    print("="*80)
-    
-    def print_metrics(model_name, metrics):
-        if not metrics:
-            print(f"  {model_name}: Metrics not available")
+    print("\n" + "=" * 80)
+    print("MODEL PERFORMANCE METRICS (on private test set)".center(80))
+    print("=" * 80)
+
+    headers = ["Model", "Accuracy", "Precision", "Recall", "F1-Score", "Loss"]
+    rows = []
+
+    def add_metrics_to_rows(model_type, metrics_dict):
+        if not metrics_dict:
+            rows.append([f"{model_type} Model", "N/A", "N/A", "N/A", "N/A", "N/A"])
             return
-        
-        for name, data in metrics.items():
-            print(f"  {model_name}: {name}")
-            print(f"    - Accuracy:  {data.get('accuracy', 'N/A'):.3f}")
-            print(f"    - Precision: {data.get('precision', 'N/A'):.3f}")
-            print(f"    - Recall:    {data.get('recall', 'N/A'):.3f}")
-            print(f"    - F1-Score:  {data.get('f1_score', 'N/A'):.3f}")
-            print(f"    - Loss:      {data.get('loss', 'N/A'):.3f}")
-            
-    print_metrics("Video Model", VIDEO_MODEL_METRICS)
-    print_metrics("Audio Model", AUDIO_MODEL_METRICS)
-    print("="*80 + "\n")
+
+        for name, data in metrics_dict.items():
+            rows.append([
+                f"{model_type}: {name}",
+                f"{data.get('accuracy', 0):.3f}",
+                f"{data.get('precision', 0):.3f}",
+                f"{data.get('recall', 0):.3f}",
+                f"{data.get('f1_score', 0):.3f}",
+                f"{data.get('loss', 0):.3f}"
+            ])
+
+    add_metrics_to_rows("Video", VIDEO_MODEL_METRICS)
+    add_metrics_to_rows("Audio", AUDIO_MODEL_METRICS)
+
+    if not rows:
+        print("  No model metrics available.".center(78))
+        print("=" * 80 + "\n")
+        return
+
+    # Calculate column widths
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(str(cell)))
+
+    # Print table header
+    header_line = " | ".join([h.ljust(w) for h, w in zip(headers, col_widths)])
+    print(f"  {header_line}")
+    print("  " + "-+-".join(["-" * w for w in col_widths]))
+
+    # Print table rows
+    for row in rows:
+        row_line = " | ".join([str(c).ljust(w) for c, w in zip(row, col_widths)])
+        print(f"  {row_line}")
+
+    print("=" * 80 + "\n")
 
 print_model_metrics()
 
@@ -1048,17 +1082,8 @@ def analyze_video():
             demo_heatmaps = []
             try:
                 import cv2
-                import mediapipe as mp
-                
-                # Try MediaPipe first, fallback to Haar Cascade if it fails
-                use_mediapipe = True
-                try:
-                    mp_face_detection = mp.solutions.face_detection
-                    face_detection = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
-                except Exception as mp_err:
-                    print(f"[FACE] MediaPipe failed, using Haar Cascade: {mp_err}")
-                    use_mediapipe = False
-                    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                # Only use Haar Cascade for fallback face detection
+                face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
                 
                 # Open video
                 cap = cv2.VideoCapture(working_video_path)
@@ -1088,30 +1113,14 @@ def analyze_video():
                     
                     faces = []
                     
-                    if use_mediapipe:
-                        # Use MediaPipe
-                        results = face_detection.process(frame_rgb)
-                        if results.detections:
-                            for detection in results.detections:
-                                bbox = detection.location_data.relative_bounding_box
-                                x1 = int(bbox.xmin * w)
-                                y1 = int(bbox.ymin * h)
-                                x2 = int((bbox.xmin + bbox.width) * w)
-                                y2 = int((bbox.ymin + bbox.height) * h)
-                                faces.append((x1, y1, x2 - x1, y2 - y1))
-                    else:
-                        # Use Haar Cascade
-                        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+                    # Use Haar Cascade only
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
                     
                     if len(faces) > 0:
                         # Get first face
-                        if use_mediapipe:
-                            x1, y1, w_face, h_face = faces[0]
-                            x2, y2 = x1 + w_face, y1 + h_face
-                        else:
-                            x1, y1, w_face, h_face = faces[0]
-                            x2, y2 = x1 + w_face, y1 + h_face
+                        x1, y1, w_face, h_face = faces[0]
+                        x2, y2 = x1 + w_face, y1 + h_face
                         
                         # Add larger padding to show full head (50% more space)
                         padding_x = int((x2 - x1) * 0.25)
@@ -1148,8 +1157,7 @@ def analyze_video():
                 
                 
                 cap.release()
-                if use_mediapipe:
-                    face_detection.close()
+
                 
                 print(f"[FACE] Extracted {len(extracted_faces)} real faces from video")
                 

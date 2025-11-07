@@ -13,67 +13,38 @@ class SimpleReport:
         self.pdf.set_font("Arial", size=11)
 
     def add_cover(self, title="RevealAI - Detection Report"):
-        """Create a professional cover page with black/neon cyan theme"""
+        """Create a professional cover page with white background and black text"""
         self.pdf.add_page()
-        
-        # Main background - Black
-        self.pdf.set_fill_color(15, 15, 30)  # Deep black/dark navy
+        # White background (default)
+        self.pdf.set_fill_color(255, 255, 255)
         self.pdf.rect(0, 0, 210, 297, 'F')
-        
-        # Neon cyan accent bar at top
-        self.pdf.set_fill_color(0, 255, 255)  # Neon cyan
-        self.pdf.rect(0, 0, 210, 8, 'F')
-        
-        # Neon cyan accent bar near bottom of header
-        self.pdf.set_fill_color(0, 255, 255)  # Neon cyan
-        self.pdf.rect(0, 85, 210, 3, 'F')
-        
-        # Title section - RevealAI
-        self.pdf.set_text_color(0, 255, 255)  # Neon cyan text
-        self.pdf.set_font("Arial", 'B', size=48)
-        self.pdf.ln(25)
+        # Title section
+        self.pdf.set_text_color(0, 0, 0)
+        self.pdf.set_font("Arial", 'B', size=44)
+        self.pdf.ln(30)
         self.pdf.cell(0, 25, "RevealAI", ln=True, align='C')
-        
         # Subtitle
-        self.pdf.set_text_color(100, 255, 255)  # Lighter cyan
         self.pdf.set_font("Arial", size=16)
         self.pdf.cell(0, 8, "Professional Deepfake Detection Report", ln=True, align='C')
-        
-        # Spacer
-        self.pdf.ln(15)
-        
+        self.pdf.ln(18)
         # Report Information section
-        self.pdf.set_text_color(255, 255, 255)  # White text
         self.pdf.set_font("Arial", 'B', size=12)
         self.pdf.cell(0, 8, "Report Information", ln=True)
-        
-        # Separator line in neon cyan
-        self.pdf.set_draw_color(0, 255, 255)
+        self.pdf.set_draw_color(0, 0, 0)
         self.pdf.set_line_width(0.5)
-        current_x = self.pdf.get_x()
         current_y = self.pdf.get_y()
         self.pdf.line(15, current_y, 195, current_y)
         self.pdf.ln(4)
-        
         # Report details
         self.pdf.set_font("Arial", size=11)
         report_date = datetime.now().strftime("%B %d, %Y at %H:%M:%S")
-        
+        self.pdf.set_text_color(0, 0, 0)
         self.pdf.cell(40, 7, "Generated:", 0, 0)
-        self.pdf.set_text_color(0, 255, 255)  # Neon cyan for values
         self.pdf.cell(0, 7, report_date, 0, 1)
-        
-        self.pdf.set_text_color(255, 255, 255)  # White for labels
         self.pdf.cell(40, 7, "System:", 0, 0)
-        self.pdf.set_text_color(0, 255, 255)  # Neon cyan for values
         self.pdf.cell(0, 7, "RevealAI v2.0", 0, 1)
-        
-        self.pdf.set_text_color(255, 255, 255)  # White for labels
         self.pdf.cell(40, 7, "Analysis Type:", 0, 0)
-        self.pdf.set_text_color(0, 255, 255)  # Neon cyan for values
         self.pdf.cell(0, 7, "Multi-Modal Detection", 0, 1)
-        
-        # Reset colors for next page
         self.pdf.set_text_color(0, 0, 0)
         self.pdf.set_draw_color(0, 0, 0)
 
@@ -102,51 +73,53 @@ class SimpleReport:
 
         # --- Page 1: Summary & Verdict ---
         self.pdf.add_page()
-        
-        # Add neon cyan top line accent
-        self.pdf.set_draw_color(0, 255, 255)
+        # Add black top line accent
+        self.pdf.set_draw_color(0, 0, 0)
         self.pdf.set_line_width(1)
         self.pdf.line(10, 10, 200, 10)
         self.pdf.ln(3)
-        
         self.pdf.set_font("Arial", 'B', size=18)
-        self.pdf.set_text_color(0, 100, 100)  # Cyan color
-        self.pdf.cell(0, 10, "Analysis Summary", ln=True)
         self.pdf.set_text_color(0, 0, 0)
+        self.pdf.cell(0, 10, "Analysis Summary", ln=True)
         self.pdf.ln(2)
         
-        # Determine verdict color and description
+        # Determine verdict color and description (red/green/yellow only)
         if final_score > 0.7:
             verdict_text = "LIKELY DEEPFAKE"
-            verdict_color = (192, 57, 43)  # Red
+            verdict_color = (255, 0, 0)  # Red
+            text_color = (180, 0, 0)
             confidence = "High"
         elif final_score > 0.5:
             verdict_text = "SUSPICIOUS"
-            verdict_color = (230, 126, 34)  # Orange
+            verdict_color = (255, 215, 0)  # Yellow
+            text_color = (180, 120, 0)
             confidence = "Medium"
         elif final_score > 0.3:
             verdict_text = "UNCERTAIN"
-            verdict_color = (155, 89, 182)  # Purple
+            verdict_color = (200, 200, 200)  # Gray
+            text_color = (80, 80, 80)
             confidence = "Low"
         else:
             verdict_text = "LIKELY AUTHENTIC"
-            verdict_color = (46, 204, 113)  # Green
+            verdict_color = (0, 180, 0)  # Green
+            text_color = (0, 120, 0)
             confidence = "High"
-        
-        # Verdict box with color and border
-        self.pdf.set_fill_color(verdict_color[0], verdict_color[1], verdict_color[2])
-        self.pdf.set_draw_color(0, 0, 0)
-        self.pdf.set_line_width(0.5)
-        self.pdf.set_text_color(255, 255, 255)
+        # Verdict box with border only, white fill
+        self.pdf.set_fill_color(255, 255, 255)
+        self.pdf.set_draw_color(*verdict_color)
+        self.pdf.set_line_width(1)
+        self.pdf.set_xy(55, self.pdf.get_y())
+        self.pdf.cell(100, 15, '', border=1, ln=1, align='C', fill=True)
+        self.pdf.set_xy(0, self.pdf.get_y() - 15)
+        self.pdf.set_text_color(*text_color)
         self.pdf.set_font("Arial", 'B', size=16)
-        self.pdf.cell(0, 15, verdict_text, ln=True, align='C', fill=True)
+        self.pdf.cell(0, 15, verdict_text, ln=True, align='C')
         self.pdf.set_text_color(0, 0, 0)
         
         self.pdf.ln(5)
         self.pdf.set_font("Arial", 'B', size=12)
-        self.pdf.set_text_color(0, 100, 100)  # Cyan color for section headers
-        self.pdf.cell(0, 8, "File Information", ln=True)
         self.pdf.set_text_color(0, 0, 0)
+        self.pdf.cell(0, 8, "File Information", ln=True)
         self.pdf.set_font("Arial", size=11)
         self.pdf.cell(50, 7, "Filename:", 0, 0)
         self.pdf.cell(0, 7, str(filename)[:60], 0, 1)
@@ -157,7 +130,7 @@ class SimpleReport:
                 return
             self.pdf.ln(4)
             self.pdf.set_font("Arial", 'B', size=11)
-            self.pdf.set_text_color(0, 100, 100)
+            self.pdf.set_text_color(80, 80, 80)  # Gray for section headers
             self.pdf.cell(0, 7, title, ln=True)
             self.pdf.set_text_color(0, 0, 0)
             self.pdf.set_font("Arial", size=10)
@@ -171,55 +144,61 @@ class SimpleReport:
 
         self.pdf.ln(6)
         self.pdf.set_font("Arial", 'B', size=12)
-        self.pdf.set_text_color(0, 100, 100)  # Cyan color
-        self.pdf.cell(0, 8, "Detection Scores", ln=True)
         self.pdf.set_text_color(0, 0, 0)
+        self.pdf.cell(0, 8, "Detection Scores", ln=True)
         self.pdf.set_font("Arial", size=11)
-        
         # Score table with better formatting
         self.pdf.cell(70, 7, "Video Analysis Score:", 0, 0)
-        self.pdf.set_text_color(0, 150, 150)  # Cyan for values
+        self.pdf.set_text_color(0, 0, 0)
         if show_video_score:
             self.pdf.cell(50, 7, f"{video_score:.1%}", 0, 1)
         else:
             self.pdf.cell(50, 7, "N/A", 0, 1)
         self.pdf.set_text_color(0, 0, 0)
-        
         self.pdf.cell(70, 7, "Audio Analysis Score:", 0, 0)
-        self.pdf.set_text_color(0, 150, 150)  # Cyan for values
+        self.pdf.set_text_color(0, 0, 0)
         if show_audio_score:
             self.pdf.cell(50, 7, f"{audio_score:.1%}", 0, 1)
         else:
             self.pdf.cell(50, 7, "N/A", 0, 1)
         self.pdf.set_text_color(0, 0, 0)
-        
         self.pdf.set_font("Arial", 'B', size=11)
         self.pdf.cell(70, 8, "FINAL CONFIDENCE SCORE:", 0, 0)
-        self.pdf.set_text_color(255, 0, 0)  # Red for final score
+        # Red for high, yellow for medium, green for low
+        if final_score > 0.7:
+            score_color = (255, 0, 0)
+        elif final_score > 0.5:
+            score_color = (255, 215, 0)
+        elif final_score > 0.3:
+            score_color = (80, 80, 80)
+        else:
+            score_color = (0, 180, 0)
+        self.pdf.set_text_color(*score_color)
         self.pdf.cell(50, 8, f"{final_score:.1%}", 0, 1)
         self.pdf.set_text_color(0, 0, 0)
-        
         self.pdf.set_font("Arial", size=11)
         self.pdf.cell(70, 7, "Detection Confidence:", 0, 0)
-        self.pdf.set_text_color(0, 150, 150)  # Cyan for values
+        self.pdf.set_text_color(80, 80, 80)
         self.pdf.cell(50, 7, confidence, 0, 1)
         self.pdf.set_text_color(0, 0, 0)
-        
         self.pdf.ln(5)
         self.pdf.set_font("Arial", 'B', size=13)
         self.pdf.cell(0, 8, "How to Interpret These Results", ln=True)
         self.pdf.set_font("Arial", size=10)
-        
-        # Use simple text instead of multi_cell to avoid Unicode issues
         self.pdf.cell(0, 5, "Score Range:", ln=True)
         self.pdf.cell(5, 5, "")
+        self.pdf.set_text_color(0, 180, 0)
         self.pdf.cell(0, 5, "0.0 - 0.3: Likely AUTHENTIC (genuine content)", ln=True)
+        self.pdf.set_text_color(80, 80, 80)
         self.pdf.cell(5, 5, "")
         self.pdf.cell(0, 5, "0.3 - 0.5: UNCERTAIN (requires further investigation)", ln=True)
+        self.pdf.set_text_color(255, 215, 0)
         self.pdf.cell(5, 5, "")
         self.pdf.cell(0, 5, "0.5 - 0.7: SUSPICIOUS (possible deepfake indicators detected)", ln=True)
+        self.pdf.set_text_color(255, 0, 0)
         self.pdf.cell(5, 5, "")
         self.pdf.cell(0, 5, "0.7 - 1.0: Likely DEEPFAKE (strong evidence of synthesis)", ln=True)
+        self.pdf.set_text_color(0, 0, 0)
         self.pdf.ln(3)
         self.pdf.set_font("Arial", size=9)
         self.pdf.multi_cell(0, 4,
@@ -231,7 +210,49 @@ class SimpleReport:
             self.pdf.set_font("Arial", 'B', size=16)
             self.pdf.cell(0, 10, "What We Found", ln=True)
             self.pdf.ln(3)
-            
+
+            # Always show verdict box
+            if verdict is not None:
+                if verdict.upper() == "REAL" or verdict.upper() == "LIKELY AUTHENTIC":
+                    verdict_color = (0, 180, 0)
+                    text_color = (0, 120, 0)
+                    verdict_text = "LIKELY AUTHENTIC"
+                    xai_explanation = "The audio signal is consistent with genuine, unaltered speech. No significant signs of manipulation or synthesis were detected."
+                elif verdict.upper() == "FAKE" or verdict.upper() == "LIKELY DEEPFAKE":
+                    verdict_color = (255, 0, 0)
+                    text_color = (180, 0, 0)
+                    verdict_text = "LIKELY DEEPFAKE"
+                    xai_explanation = "The AI detected strong evidence of synthetic or manipulated audio, such as unnatural frequency patterns or artifacts typical of deepfake generation."
+                elif verdict.upper() == "SUSPICIOUS":
+                    verdict_color = (255, 215, 0)
+                    text_color = (180, 120, 0)
+                    verdict_text = "SUSPICIOUS"
+                    xai_explanation = "Some anomalies were found in the audio that may indicate manipulation, but the evidence is not conclusive. Further review is recommended."
+                else:
+                    verdict_color = (200, 200, 200)
+                    text_color = (80, 80, 80)
+                    verdict_text = verdict.upper()
+                    xai_explanation = "The AI was unable to confidently classify the audio. Please review the analysis details for more information."
+                self.pdf.set_fill_color(255, 255, 255)
+                self.pdf.set_draw_color(*verdict_color)
+                self.pdf.set_line_width(1)
+                y = self.pdf.get_y()
+                self.pdf.set_xy(55, y)
+                self.pdf.cell(100, 12, '', border=1, ln=1, align='C', fill=True)
+                self.pdf.set_xy(0, y)
+                self.pdf.set_text_color(*text_color)
+                self.pdf.set_font("Arial", 'B', size=14)
+                self.pdf.cell(0, 12, f"VERDICT: {verdict_text}", ln=True, align='C')
+                self.pdf.set_text_color(0, 0, 0)
+                self.pdf.ln(2)
+                # Add Explainable AI Verdict
+                self.pdf.set_font("Arial", 'B', size=11)
+                self.pdf.cell(0, 7, "Explainable AI Verdict:", ln=True)
+                self.pdf.set_font("Arial", size=10)
+                self.pdf.set_fill_color(245, 245, 245)
+                self.pdf.multi_cell(0, 5, xai_explanation, fill=True)
+                self.pdf.ln(2)
+
             # Main summary in a highlighted box
             if 'explanation' in findings:
                 self.pdf.set_fill_color(240, 240, 240)  # Light gray background
@@ -239,76 +260,53 @@ class SimpleReport:
                 self.pdf.cell(5, 5, "")
                 self.pdf.multi_cell(0, 5, findings['explanation'], fill=True)
                 self.pdf.ln(3)
-            
+
             # Detailed findings list
             if 'findings' in findings and isinstance(findings['findings'], list):
                 self.pdf.set_font("Arial", 'B', size=11)
                 self.pdf.cell(0, 8, "Key Findings:", ln=True)
                 self.pdf.ln(2)
-                
                 self.pdf.set_font("Arial", size=10)
                 for i, finding in enumerate(findings['findings'], 1):
-                    # Use bullet character (dash) instead of special chars
                     finding_text = str(finding).strip()
-                    
-                    # Add indentation and dash
                     self.pdf.set_x(20)
-                    self.pdf.multi_cell(0, 5, f"- {finding_text}", 
-                                       split_only=False)
+                    self.pdf.multi_cell(0, 5, f"- {finding_text}", split_only=False)
                     self.pdf.ln(1)
         
-        # --- Page 3: Visual Evidence (Heatmaps with Originals) ---
+        # --- Page: Frame Analysis with Heatmap Overlay ---
         if heatmaps and len(heatmaps) > 0:
             self.pdf.add_page()
-            
-            # Add neon cyan accent line at top
-            self.pdf.set_draw_color(0, 255, 255)
+            self.pdf.set_draw_color(0, 0, 0)
             self.pdf.set_line_width(1)
             self.pdf.line(10, 10, 200, 10)
-            
             self.pdf.set_font("Arial", 'B', size=16)
-            self.pdf.set_text_color(0, 100, 100)  # Cyan-ish color
-            self.pdf.cell(0, 10, "Frame Analysis with Heatmap Overlay", ln=True)
             self.pdf.set_text_color(0, 0, 0)
+            self.pdf.cell(0, 10, "Frame Analysis with Heatmap Overlay", ln=True)
             self.pdf.ln(2)
-            
             self.pdf.set_font("Arial", size=9)
             self.pdf.multi_cell(0, 4,
-                "Below are side-by-side comparisons of original frames and AI detection heatmaps. Left: Original frame from video. Right: AI model heatmap showing suspicious regions (red=high suspicion, blue=authentic areas).")
+                "Below are side-by-side comparisons of original frames and AI detection heatmaps. Left: Original frame from video. Right: AI model heatmap showing suspicious regions.")
             self.pdf.ln(2)
-            
-            # Display heatmaps with originals side-by-side
-            img_width = 75  # Slightly smaller to fit verdict below
-            spacing = 8     # Space between columns
-            
+            img_width = 75
+            spacing = 8
             for i, img_arr in enumerate(heatmaps):
                 try:
-                    # Check if we need page break
                     if self.pdf.get_y() > 240:
                         self.pdf.add_page()
                         self.pdf.ln(5)
-                    
-                    # Frame label with neon cyan styling
                     self.pdf.set_font("Arial", 'B', size=11)
-                    self.pdf.set_text_color(0, 150, 150)  # Cyan color
+                    self.pdf.set_text_color(80, 80, 80)
                     self.pdf.cell(0, 7, f"Frame {i+1}", ln=True)
                     self.pdf.set_text_color(0, 0, 0)
-                    
-                    # Column headers
                     self.pdf.set_font("Arial", 'B', size=8)
                     self.pdf.cell(img_width, 5, "Original Frame", align='C')
                     self.pdf.cell(spacing, 5, "")
                     self.pdf.cell(img_width, 5, "AI Detection Heatmap", align='C', ln=True)
-                    
-                    # Get Y position for images
                     img_y_start = self.pdf.get_y()
-                    
                     # Prepare heatmap image
                     tmp_hm = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                     tmp_hm_path = tmp_hm.name
                     tmp_hm.close()
-                    
-                    # Convert heatmap to PIL and save
                     if isinstance(img_arr, np.ndarray):
                         if img_arr.dtype != np.uint8:
                             hm_img_uint8 = (img_arr * 255).astype(np.uint8) if img_arr.max() <= 1 else img_arr.astype(np.uint8)
@@ -317,13 +315,11 @@ class SimpleReport:
                         Image.fromarray(hm_img_uint8).save(tmp_hm_path)
                     else:
                         img_arr.save(tmp_hm_path)
-                    
-                    # Display original frame if available (use placeholder if not)
+                    # Display original frame if available
                     if original_frames and i < len(original_frames) and original_frames[i] is not None:
                         tmp_orig = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                         tmp_orig_path = tmp_orig.name
                         tmp_orig.close()
-                        
                         orig_img = original_frames[i]
                         if isinstance(orig_img, np.ndarray):
                             if orig_img.dtype != np.uint8:
@@ -333,46 +329,20 @@ class SimpleReport:
                             Image.fromarray(orig_img_uint8).save(tmp_orig_path)
                         else:
                             orig_img.save(tmp_orig_path)
-                        
-                        # Add original frame image with border
-                        self.pdf.set_draw_color(0, 255, 255)  # Neon cyan border
+                        self.pdf.set_draw_color(0, 0, 0)
                         self.pdf.set_line_width(0.3)
                         self.pdf.image(tmp_orig_path, x=10, y=img_y_start, w=img_width, h=img_width)
                     else:
-                        # Draw placeholder for original frame
                         self.pdf.set_xy(10, img_y_start)
                         self.pdf.set_draw_color(100, 100, 100)
                         self.pdf.rect(10, img_y_start, img_width, img_width)
                         self.pdf.set_font("Arial", size=8)
                         self.pdf.set_xy(10, img_y_start + img_width//2 - 2)
                         self.pdf.cell(img_width, 4, "(Original frame)", align='C')
-                    
-                    # Add heatmap image on right with border
-                    self.pdf.set_draw_color(0, 255, 255)  # Neon cyan border
+                    self.pdf.set_draw_color(0, 0, 0)
                     self.pdf.set_line_width(0.3)
                     self.pdf.image(tmp_hm_path, x=10 + img_width + spacing, y=img_y_start, w=img_width, h=img_width)
-                    
-                    # Move below images
                     self.pdf.set_y(img_y_start + img_width + 2)
-                    
-                    # Add verdict below frames
-                    self.pdf.set_font("Arial", 'B', size=9)
-                    verdict_text = f"Verdict: {verdict.upper()}"
-                    
-                    # Color code the verdict
-                    if "DEEPFAKE" in verdict.upper():
-                        self.pdf.set_text_color(255, 0, 0)  # Red
-                    elif "SUSPICIOUS" in verdict.upper():
-                        self.pdf.set_text_color(255, 165, 0)  # Orange
-                    elif "UNCERTAIN" in verdict.upper():
-                        self.pdf.set_text_color(155, 89, 182)  # Purple
-                    else:
-                        self.pdf.set_text_color(0, 200, 0)  # Green
-                    
-                    self.pdf.cell(0, 5, verdict_text, ln=True, align='C')
-                    self.pdf.set_text_color(0, 0, 0)
-                    self.pdf.ln(2)
-                    
                     # Cleanup temp files
                     if os.path.exists(tmp_hm_path):
                         try:
@@ -384,112 +354,12 @@ class SimpleReport:
                             os.unlink(tmp_orig_path)
                         except:
                             pass
-                            
                 except Exception as e:
-                    print(f"[WARN] Could not add frame {i+1}: {e}")
-                    self.pdf.set_font("Arial", size=9)
-                    self.pdf.cell(0, 6, f"Error displaying Frame {i+1}", ln=True)
+                    # Hide all errors in PDF generation
+                    pass
         
         # --- Page 4: Audio Analysis (Spectrogram & Heatmap) ---
-        if spec_img is not None or audio_heatmap is not None:
-            try:
-                self.pdf.add_page()
-                
-                # Add neon cyan accent line at top
-                self.pdf.set_draw_color(0, 255, 255)
-                self.pdf.set_line_width(1)
-                self.pdf.line(10, 10, 200, 10)
-                
-                self.pdf.set_font("Arial", 'B', size=16)
-                self.pdf.set_text_color(0, 100, 100)  # Cyan-ish color
-                self.pdf.cell(0, 10, "Audio Analysis", ln=True)
-                self.pdf.set_text_color(0, 0, 0)
-                self.pdf.ln(3)
-                
-                # Explanation
-                self.pdf.set_font("Arial", size=9)
-                if audio_heatmap is not None:
-                    self.pdf.multi_cell(0, 4,
-                        "Spectrogram Heatmap Analysis: The visualization below is a professional audio spectrogram heatmap showing frequency content (vertical axis) over time (horizontal axis). Red/hot colors indicate high energy regions that the AI model analyzes for unnatural patterns, artifacts, and synthesis indicators of AI-generated or manipulated speech.")
-                else:
-                    self.pdf.multi_cell(0, 4,
-                        "Spectrogram Analysis: The image below is a spectrogram representation of the audio signal. It shows frequency content over time. The AI model analyzes this for unnatural patterns and artifacts that indicate synthetic or manipulated speech.")
-                self.pdf.ln(3)
-                
-                # Display audio heatmap if available (preferred for visual quality)
-                if audio_heatmap is not None:
-                    try:
-                        tmp_hm = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                        tmp_hm_path = tmp_hm.name
-                        tmp_hm.close()
-                        
-                        # Ensure audio_heatmap is uint8 numpy array with correct shape
-                        if isinstance(audio_heatmap, np.ndarray):
-                            # Make a copy to avoid modifying original
-                            hm_copy = audio_heatmap.copy()
-                            
-                            # Ensure it's uint8
-                            if hm_copy.dtype != np.uint8:
-                                if hm_copy.max() <= 1.0:
-                                    hm_uint8 = (hm_copy * 255).astype(np.uint8)
-                                else:
-                                    hm_uint8 = hm_copy.astype(np.uint8)
-                            else:
-                                hm_uint8 = hm_copy
-                            
-                            # Ensure shape is (height, width, 3) for RGB
-                            if len(hm_uint8.shape) == 2:
-                                # Grayscale - convert to RGB
-                                hm_uint8 = np.stack([hm_uint8] * 3, axis=-1)
-                            elif len(hm_uint8.shape) == 3 and hm_uint8.shape[2] == 4:
-                                # RGBA - convert to RGB
-                                hm_uint8 = hm_uint8[:, :, :3]
-                            
-                            print(f"[REPORT] Audio heatmap shape: {hm_uint8.shape}, dtype: {hm_uint8.dtype}, min: {hm_uint8.min()}, max: {hm_uint8.max()}")
-                            
-                            # Save as PIL Image
-                            pil_img = Image.fromarray(hm_uint8, mode='RGB')
-                            pil_img.save(tmp_hm_path, format='PNG')
-                        else:
-                            # Already a PIL Image
-                            audio_heatmap.save(tmp_hm_path, format='PNG')
-                        
-                        # Verify file was created
-                        if not os.path.exists(tmp_hm_path):
-                            raise Exception("Failed to create temporary heatmap file")
-                        
-                        # Add large professional heatmap (scales to fit page)
-                        self.pdf.image(tmp_hm_path, x=10, w=190)
-                        self.pdf.ln(2)
-                        
-                        # Add interpretation text
-                        self.pdf.set_font("Arial", size=8)
-                        self.pdf.set_text_color(100, 100, 100)  # Gray text
-                        self.pdf.multi_cell(0, 3,
-                            "Legend: Dark/Blue regions = Low energy (authentic pauses/silence) | Yellow/Red regions = High energy (speech content). AI-generated speech often shows unnatural frequency distributions and inconsistent energy patterns.")
-                        self.pdf.set_text_color(0, 0, 0)
-                        
-                        # Cleanup
-                        if os.path.exists(tmp_hm_path):
-                            try:
-                                os.unlink(tmp_hm_path)
-                            except:
-                                pass
-                    
-                    except Exception as e:
-                        print(f"[WARN] Could not add audio heatmap: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        # Fallback to small spectrogram if heatmap fails
-                        if spec_img is not None:
-                            self._add_spectrogram_fallback(spec_img)
-                
-                # Display small spectrogram as fallback or secondary view (only if we couldn't show heatmap)
-                elif spec_img is not None:
-                    self._add_spectrogram_fallback(spec_img)
-                
-            except Exception as e:
-                print(f"[WARN] Could not add audio analysis: {e}")
+        # (Removed for audio-only reports)
 
     def _add_spectrogram_fallback(self, spec_img):
         """Helper function to add small spectrogram when heatmap is not available"""
@@ -566,10 +436,8 @@ def generate_report_for_media(media_type, filename, analysis_results, video_meta
 
     show_video_score = video_score_raw is not None
     show_audio_score = audio_score_raw is not None
+    # Only use current upload's data, do not retrieve or merge with previous uploads
     heatmaps = analysis_results.get('heatmaps', [])
-    heatmap_overlays = analysis_results.get('heatmap_overlays')
-    if heatmap_overlays:
-        heatmaps = heatmap_overlays
     original_frames = analysis_results.get('original_frames', [])
     spec_img = analysis_results.get('spec_img')
     audio_heatmap = analysis_results.get('audio_heatmap')

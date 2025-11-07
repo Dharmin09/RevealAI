@@ -468,6 +468,14 @@ html.dark span { color: inherit !important; }
 html.dark div { color: inherit !important; }
 
 /* New dark mode styles */
+
+.dark .feature-list-small-screen {
+    color: #d1d5db;
+}
+
+.dark .feature-list-small-screen .border-l {
+    border-color: #4b5563;
+}
 .dark .dark\:text-gray-300 {
     color: #d1d5db;
 }

@@ -359,6 +359,13 @@ p, span, a, button, input, select, textarea {
     font-optical-sizing: auto;
 }
 
+@media (max-width: 360px) {
+    .feature-list-small-screen {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
 /* ====================================
    PRINT STYLING
    ==================================== */

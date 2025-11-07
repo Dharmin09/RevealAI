@@ -33,3 +33,14 @@ models/*
 # OS files
 Thumbs.db
 .DS_Store
+a
+
+# Node.js dependencies
+frontend/web/node_modules/
+
+# Downloaded models
+backend/core/opencv_models/
+
+# Data & generated media
+audio/
+video/

@@ -1,3 +1,61 @@
+import sys
+import os
+try:
+    from pkg_resources import get_distribution, DistributionNotFound
+    protobuf_version = get_distribution('protobuf').version
+    if not protobuf_version.startswith('3.20.'):
+        # This is a fatal error. The program cannot continue.
+        print("=" * 80, file=sys.stderr)
+        print("[FATAL ENVIRONMENT ERROR]", file=sys.stderr)
+        print("Your Python environment is not set up correctly.", file=sys.stderr)
+        print("\nREASON:", file=sys.stderr)
+        print("  The 'protobuf' library version is incorrect. Mediapipe, which is used for", file=sys.stderr)
+        print("  face detection, requires version 3.20.x of this library.", file=sys.stderr)
+        print(f"  You currently have version {protobuf_version} installed.", file=sys.stderr)
+        print("\nSOLUTION:", file=sys.stderr)
+        print("  Please run the following command in your terminal to install the correct version:", file=sys.stderr)
+        
+        # Construct the platform-specific command to be helpful
+        # Assumes the .venv is in the parent directory of this file's parent directory (i.e., repo root)
+        utils_dir = os.path.dirname(__file__)
+        repo_root = os.path.abspath(os.path.join(utils_dir, '..', '..'))
+        python_executable = os.path.join(repo_root, '.venv', 'Scripts', 'python.exe') if os.name == 'nt' else os.path.join(repo_root, '.venv', 'bin', 'python')
+
+        print(f"\n    {python_executable} -m pip install protobuf==3.20.3\n", file=sys.stderr)
+        print("After running this command, please restart the server.", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        sys.exit(1) # Exit the program
+except (DistributionNotFound, ImportError):
+    # If pkg_resources or protobuf is not installed, it will crash soon anyway.
+    # This is a less common case than the version mismatch.
+    pass
+
+# --- OpenCV DNN face detector fallback ---
+def opencv_dnn_face_bbox(img_rgb, conf_threshold=0.05):
+    """
+    Detect face using OpenCV DNN. Returns (x, y, w, h) or None if not found.
+    """
+    model_dir = os.path.join(os.path.dirname(__file__), 'opencv_models')
+    proto = os.path.join(model_dir, 'deploy.prototxt')
+    model = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
+    if not (os.path.exists(proto) and os.path.exists(model)):
+        print('[DNN] Face model files not found.')
+        return None
+    net = cv2.dnn.readNetFromCaffe(proto, model)
+    h, w = img_rgb.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR), 1.0, (300, 300), (104.0, 177.0, 123.0))
+    net.setInput(blob)
+    detections = net.forward()
+    for i in range(detections.shape[2]):
+        confidence = detections[0, 0, i, 2]
+        if confidence > conf_threshold:
+            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+            x, y, x2, y2 = box.astype(int)
+            print(f"[DNN] Face detected: conf={confidence:.2f}, bbox=({x},{y},{x2-x},{y2-y})")
+            return (max(0, x), max(0, y), min(w, x2)-max(0, x), min(h, y2)-max(0, y))
+    print("[DNN] No face detected by OpenCV DNN.")
+    return None
+    return None
  
 # src/core/utils.py
 import os
@@ -444,12 +502,16 @@ def extract_audio_from_video(video_path, target_sr=16000, channels=1, max_durati
     ffmpeg_cmd.extend(['-y', tmp_path])
 
     try:
-        subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        # Use DEVNULL for stderr to suppress verbose output, especially for common cases
+        # like videos without an audio stream, which ffmpeg treats as an error.
+        subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
         return tmp_path
     except FileNotFoundError:
         print("[WARNING] ffmpeg executable not found. Install ffmpeg or add it to PATH for audio extraction.")
-    except subprocess.CalledProcessError as ffmpeg_error:
-        print(f"[WARNING] ffmpeg failed to extract audio: {ffmpeg_error}")
+    except subprocess.CalledProcessError:
+        # This error now likely indicates a more serious problem (e.g., corrupted file)
+        # since common "errors" like missing audio streams are silenced.
+        print(f"[WARNING] ffmpeg failed to extract audio. The file may be corrupt or in an unsupported format.")
 
     _cleanup_tmp(tmp_path)
     return None
@@ -610,15 +672,15 @@ def create_audio_heatmap_visualization(audio_path, sr=16000, n_mels=256, hop_len
             verdict_color = '#6B7280'  # Gray
         elif score > 0.7:
             cmap_name = 'hot'  # Red/hot colormap for DEEPFAKE
-            verdict_text = 'DEEPFAKE DETECTED'
+            verdict_text = 'LIKELY FAKE'
             verdict_color = '#DC2626'  # Red
         elif score > 0.4:
             cmap_name = 'twilight'  # Purple/cyan twilight for UNCERTAIN
-            verdict_text = 'UNCERTAIN'
+            verdict_text = 'SUSPICIOUS'
             verdict_color = '#F59E0B'  # Amber
         else:
             cmap_name = 'cool'  # Blue colormap for AUTHENTIC
-            verdict_text = 'AUTHENTIC'
+            verdict_text = 'LIKELY REAL'
             verdict_color = '#10B981'  # Green
         
         # Display spectrogram with verdict-based coloring
@@ -890,8 +952,8 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
 
         grad_mean = tf.reduce_mean(tf.abs(grads))
         if grad_mean < 1e-6:
-            print(f"[GRAD-CAM] ⚠️ Gradients are effectively zero (mean={grad_mean:.2e}), returning blank heatmap")
-            # Return a blank heatmap instead of a center-focused fallback
+            # Gradients are effectively zero, which means the model is not producing a
+            # meaningful activation map for this frame. Return a blank heatmap.
             return np.zeros((fallback_height, fallback_width), dtype=np.float32), confidence
 
 
@@ -982,23 +1044,32 @@ def overlay_heatmap_on_image(img_rgb, heatmap, alpha=0.6, face_bbox=None, cmap='
     mask = np.zeros_like(heatmap_resized, dtype=np.float32)
     if face_bbox is not None:
         x, y, w, h = face_bbox
+        print(f"[HEATMAP] Using face bbox: x={x}, y={y}, w={w}, h={h}")
+        # Tighter mask, less blur for precision
         cv2.rectangle(mask, (x, y), (x + w, y + h), 1.0, -1)
-        # Use a wide blur for soft mask
-        mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=30, sigmaY=30)
-        # Only show strong color for high activation
+        mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=10, sigmaY=10)
         heatmap_boosted = np.clip(heatmap_resized, 0.0, 1.0)
-        # Threshold: only highlight if activation > 0.35, else blue
-        highlight = (heatmap_boosted > 0.35).astype(np.float32)
-        base = np.full_like(heatmap_boosted, 0.10)  # blue for low activation
-        masked_heatmap = np.where(mask > 0.05, np.where(highlight, heatmap_boosted, base), 0.0)
+        # Lower threshold for highlight, sharper mask
+        highlight = (heatmap_boosted > 0.15).astype(np.float32)
+        base = np.full_like(heatmap_boosted, 0.10)
+        masked_heatmap = np.where(mask > 0.10, np.where(highlight, heatmap_boosted, base), 0.0)
         final_heatmap = masked_heatmap
     else:
-        # No face detected: show original image and overlay text
-        overlay_visual = img_rgb_uint8.copy()
-        cv2.putText(overlay_visual, 'No face detected', (30, img_h // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 0), 3, cv2.LINE_AA)
-        if return_layers:
-            return np.zeros_like(img_rgb_uint8), overlay_visual
-        return overlay_visual
+        # Fallback: use elliptical, soft mask in upper-center region
+        cx, cy = img_w // 2, int(img_h * 0.28)
+        ax, ay = int(img_w * 0.22), int(img_h * 0.22)
+        y_grid, x_grid = np.ogrid[:img_h, :img_w]
+        ellipse_mask = (((x_grid - cx) / ax) ** 2 + ((y_grid - cy) / ay) ** 2) <= 1
+        mask[ellipse_mask] = 1.0
+        mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=18, sigmaY=18)
+        heatmap_boosted = np.clip(heatmap_resized, 0.0, 1.0)
+        highlight = (heatmap_boosted > 0.18).astype(np.float32)
+        base = np.full_like(heatmap_boosted, 0.10)
+        masked_heatmap = np.where(mask > 0.08, np.where(highlight, heatmap_boosted, base), 0.0)
+        final_heatmap = masked_heatmap
+    # Always show a visible heatmap, even if gradients are zero
+    if np.all(final_heatmap == 0):
+        final_heatmap = mask * 0.18  # faint fallback color
 
     # Direct JET colormap
     heatmap_uint8 = (final_heatmap * 255).astype(np.uint8)
@@ -1058,7 +1129,7 @@ def create_comparison_for_pdf(original_frame, heatmap, alpha=0.3):
     return Image.fromarray(comparison_rgb)
 
 
-def extract_diverse_face_frames(video_path, num_frames=2, min_face_confidence=0.5):
+def extract_diverse_face_frames(video_path, num_frames=2, min_face_confidence=0.2):
     """
     Extract frames from video with different face angles/poses for better heatmap analysis.
     Uses MediaPipe Face Detection to find frames with diverse face orientations.
@@ -1078,8 +1149,59 @@ def extract_diverse_face_frames(video_path, num_frames=2, min_face_confidence=0.
             - 'relative_position': Position in video (0-1)
     """
     if mp_face_detection is None:
-        print("[WARN] MediaPipe not available, using uniform frame extraction instead")
-        return _extract_uniform_frames_fallback(video_path, num_frames)
+        print("[WARN] MediaPipe not available, using OpenCV DNN fallback.")
+        # Use OpenCV DNN to extract face frames
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"[WARN] Could not open video: {video_path}")
+            return []
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if total_frames <= 0 or fps <= 0:
+            cap.release()
+            return []
+        sample_interval = max(1, total_frames // 30)
+        sampled_frames = []
+        frame_idx = 0
+        while frame_idx < total_frames:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w = frame.shape[:2]
+            bbox = opencv_dnn_face_bbox(frame_rgb, conf_threshold=0.2)
+            if bbox:
+                x, y, width, height = bbox
+                face_area = width * height
+                face_center_x = x + width / 2
+                face_center_y = y + height / 2
+                face_size_norm = face_area / (w * h)
+                face_x_norm = face_center_x / w
+                face_y_norm = face_center_y / h
+                diversity_features = np.array([
+                    face_x_norm,
+                    face_y_norm,
+                    face_size_norm,
+                ])
+                sampled_frames.append({
+                    'frame_number': frame_idx,
+                    'timestamp': frame_idx / fps,
+                    'frame_rgb': frame_rgb.copy(),
+                    'face_bbox': (x, y, width, height),
+                    'face_score': 1.0,
+                    'relative_position': frame_idx / total_frames,
+                    'diversity_features': diversity_features,
+                    'face_area': face_area,
+                })
+            frame_idx += sample_interval
+        cap.release()
+        if len(sampled_frames) == 0:
+            print("[WARN] No faces detected in video, using uniform frame extraction")
+            return _extract_uniform_frames_fallback(video_path, num_frames)
+        selected_frames = _select_diverse_frames(sampled_frames, num_frames)
+        print(f"[FACE-DNN] Extracted {len(selected_frames)} frames with OpenCV DNN")
+        return selected_frames
     
     try:
         cap = cv2.VideoCapture(video_path)

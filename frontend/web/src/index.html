@@ -54,6 +54,10 @@
     <!-- scripts loaded at end of body to avoid duplicate execution and ensure DOM is ready -->
 </head>
 <body class="min-h-screen bg-white text-gray-900 dark:bg-black dark:text-white" style="overflow-x: hidden;">
+        <!-- Highlight message: only on home page, fades after 3s -->
+        <div id="home-highlight-msg" style="text-align:center; color:#b8d8ff; font-weight:600; font-size:1.2rem; margin: 32px auto 0 auto; max-width: 600px; opacity:1; background:rgba(24,24,24,0.85); border-radius:1.5rem; padding:0.8rem 0; box-shadow:0 2px 16px 0 #0002; z-index:1000;">
+            94% Accuracy &bull; Real-time Analysis &bull; Secure &amp; Private
+        </div>
     <header class="fixed top-4 left-1/2 transform -translate-x-1/2 w-[92vw] md:w-3/4 lg:w-2/3 z-40 backdrop-blur-md bg-white/80 dark:bg-black/80 rounded-xl shadow-lg border border-gray-200 dark:border-white/10">
         <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
             <a href="index.html" class="text-2xl font-extrabold text-indigo-600 hover:text-indigo-700 dark:text-purple-400 dark:hover:text-purple-300 transition cursor-pointer" style="font-family: 'Tourney', sans-serif;" onclick="navigateTo('index.html', event);">RevealAI</a>
@@ -801,6 +805,7 @@
 
     <script type="module" src="scripts/nav-auth.js?v=final-cleanup" defer></script>
     <script src="scripts/main.js?v=final-cleanup" defer></script>
+    <script src="scripts/home-highlight.js"></script>
 </body>
 </html>
 
